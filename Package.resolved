@@ -1,0 +1,114 @@
+{
+  "originHash" : "9e2469bd66cfe8d958b4088b04899144bdd2bf4c93189b4d639cc6f4bef38721",
+  "pins" : [
+    {
+      "identity" : "arraytrie",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/adalinxx/ArrayTrie.git",
+      "state" : {
+        "revision" : "2d512cb4fb58696bb79200a699801f92d267dcf9",
+        "version" : "1.0.0"
+      }
+    },
+    {
+      "identity" : "cryptoswift",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/krzyzanowskim/CryptoSwift.git",
+      "state" : {
+        "revision" : "f2a627b84c1ff96f21ac2fcb623ab36142dd5512",
+        "version" : "1.10.0"
+      }
+    },
+    {
+      "identity" : "swift-asn1",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-asn1.git",
+      "state" : {
+        "revision" : "a9a5efd40eaf558a2bcd48d64b1d1646be686008",
+        "version" : "1.7.1"
+      }
+    },
+    {
+      "identity" : "swift-bases",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swift-libp2p/swift-bases.git",
+      "state" : {
+        "revision" : "162f6ef3ed3ebd5954c445443d93e41d30a473da",
+        "version" : "0.2.1"
+      }
+    },
+    {
+      "identity" : "swift-cid",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swift-libp2p/swift-cid.git",
+      "state" : {
+        "revision" : "b9138d3a790ff149d44a6d20d74357e45cfc1706",
+        "version" : "0.2.1"
+      }
+    },
+    {
+      "identity" : "swift-collections",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-collections.git",
+      "state" : {
+        "revision" : "a0cb0954ecb21e4e31b0070e6ed5674e8556685a",
+        "version" : "1.6.0"
+      }
+    },
+    {
+      "identity" : "swift-crypto",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-crypto.git",
+      "state" : {
+        "revision" : "95ba0316a9b733e92bb6b071255ff46263bbe7dc",
+        "version" : "3.15.1"
+      }
+    },
+    {
+      "identity" : "swift-multibase",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swift-libp2p/swift-multibase.git",
+      "state" : {
+        "revision" : "24099da1c4f4222ea4e12586d6f9b4ecf7840b60",
+        "version" : "0.2.1"
+      }
+    },
+    {
+      "identity" : "swift-multicodec",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swift-libp2p/swift-multicodec.git",
+      "state" : {
+        "revision" : "8b22b5941f934a51945d50793b104114a92a493c",
+        "version" : "0.2.1"
+      }
+    },
+    {
+      "identity" : "swift-multihash",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swift-libp2p/swift-multihash.git",
+      "state" : {
+        "revision" : "3f96ded8e8af0787bfc7b90fbb54db28d3a28302",
+        "version" : "0.2.1"
+      }
+    },
+    {
+      "identity" : "swift-varint",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/swift-libp2p/swift-varint.git",
+      "state" : {
+        "revision" : "10254c96e8b979fe39775e28524c5da698278055",
+        "version" : "0.2.1"
+      }
+    },
+    {
+      "identity" : "triedictionary",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/adalinxx/TrieDictionary.git",
+      "state" : {
+        "revision" : "3ee63e31eb7d53cf56a5e7786e6671a7c4e422f5",
+        "version" : "0.0.9"
+      }
+    }
+  ],
+  "version" : 3
+}

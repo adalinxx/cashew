@@ -115,6 +115,47 @@ public extension MerkleDictionary {
         return result
     }
 
+    /// Fetcher-backed bounded page: up to `limit` (key, value) pairs in sorted key order
+    /// strictly greater than `after`, resolving radix nodes on demand. Unlike
+    /// `sortedKeysAndValues` (which requires every visited node already resolved and walks
+    /// from the start) combined with `resolve(.range)` (which materializes whole post-cursor
+    /// subtrees), this fetches ONLY the nodes it descends into: a branch whose entire key
+    /// range is at-or-before `after` is pruned by prefix WITHOUT being fetched, and the walk
+    /// stops the moment `limit` entries are collected. Cost is O(limit + path depth), never
+    /// O(all keys) — safe for an unauthenticated paginated listing over a large trie.
+    func boundedKeysAndValues(after: String? = nil, limit: Int, fetcher: Fetcher) async throws -> [(key: String, value: ValueType)] {
+        var result = [(key: String, value: ValueType)]()
+        guard limit > 0 else { return result }
+        for char in children.keys.sorted() {
+            if result.count >= limit { break }
+            // Every key under this child starts with `String(char)`; if `after` is strictly
+            // greater and does not descend into it, all keys here are <= after — prune
+            // without fetching the subtree.
+            if let after, after > String(char), !after.hasPrefix(String(char)) { continue }
+            guard let child = children[char] else { continue }
+            guard let node = try await child.resolve(fetcher: fetcher).node else { continue }
+            try await collectBoundedKeysAndValues(from: node, currentPath: "", after: after, limit: limit, fetcher: fetcher, into: &result)
+        }
+        return result
+    }
+
+    private func collectBoundedKeysAndValues(from node: ChildType.NodeType, currentPath: String, after: String?, limit: Int, fetcher: Fetcher, into result: inout [(key: String, value: ValueType)]) async throws {
+        if result.count >= limit { return }
+        let fullPath = currentPath + node.prefix
+        if let value = node.value, after == nil || fullPath > after! {
+            result.append((key: fullPath, value: value))
+            if result.count >= limit { return }
+        }
+        for char in node.children.keys.sorted() {
+            if result.count >= limit { return }
+            let childPrefix = fullPath + String(char)
+            if let after, after > childPrefix, !after.hasPrefix(childPrefix) { continue }
+            guard let child = node.children[char] else { continue }
+            guard let childNode = try await child.resolve(fetcher: fetcher).node else { continue }
+            try await collectBoundedKeysAndValues(from: childNode, currentPath: fullPath, after: after, limit: limit, fetcher: fetcher, into: &result)
+        }
+    }
+
     private func collectKeysSorted(from node: ChildType.NodeType, currentPath: String, limit: Int, after: String?, into result: inout [String]) throws {
         guard result.count < limit else { return }
         let fullPath = currentPath + node.prefix
