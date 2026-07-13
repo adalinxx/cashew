@@ -1,38 +1,34 @@
-import Crypto
 import Foundation
 
 public extension Volume {
     func storeRecursively(storer: Storer) throws {
         // Calling storage on a Volume root is a request to publish that complete
-        // availability unit. An unresolved root cannot be published. Unresolved
-        // nested Volumes are skipped by Node.storeRecursively because each nested
-        // boundary is an independent availability unit.
-        guard let node = node else { throw DataErrors.nodeNotAvailable }
-
-        let dataToStore: Data
-        if let info = encryptionInfo {
-            guard let keyProvider = storer as? KeyProvider else { throw DataErrors.keyNotFound }
-            guard let key = keyProvider.key(for: info.keyHash) else { throw DataErrors.keyNotFound }
-            guard let ivData = info.ivData else { throw DataErrors.invalidIV }
-            let nonce = try AES.GCM.Nonce(data: ivData)
-            let plaintext = try Self.serializeNode(node, codec: Self.defaultCodec)
-            dataToStore = try EncryptionHelper.encrypt(data: plaintext, key: key, nonce: nonce)
-        } else {
-            guard let nodeData = node.toData() else { throw DataErrors.serializationFailed }
-            dataToStore = nodeData
-        }
+        // availability unit. An unresolved root cannot be published.
+        guard let node else { throw DataErrors.nodeNotAvailable }
+        let dataToStore = try serializedDataForStorage(storer: storer)
 
         if let volumeAware = storer as? VolumeAwareStorer {
-            try volumeAware.enterVolume(rootCID: rawCID)
+            let nestedVolumes: [any Header]
             do {
+                // Entry itself is covered by the abort path. A conformer that
+                // allocates its scope before throwing must still be cleaned up.
+                try volumeAware.enterVolume(rootCID: rawCID)
                 try volumeAware.store(rawCid: rawCID, data: dataToStore)
-                try node.storeRecursively(storer: volumeAware)
+                nestedVolumes = try node.storeWithinCurrentVolume(storer: volumeAware)
                 try volumeAware.exitVolume(rootCID: rawCID)
             } catch {
                 // A failed walk must never leave a scope that can later be flushed
                 // as though it were a complete Volume. Preserve the original error.
                 volumeAware.abortVolume(rootCID: rawCID)
                 throw error
+            }
+
+            // A nested Volume is an independent availability unit. The parent has
+            // already published its structural edge and complete ordinary contents;
+            // failure to store a materialized child cannot retroactively make the
+            // parent partial.
+            for nested in nestedVolumes {
+                try nested.storeRecursively(storer: volumeAware)
             }
         } else {
             try storer.store(rawCid: rawCID, data: dataToStore)
