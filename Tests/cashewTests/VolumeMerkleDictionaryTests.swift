@@ -201,10 +201,19 @@ private struct Company: Node, Sendable {
 /// A VolumeAwareStorer that groups CIDs by Volume boundary, mirroring
 /// BrokerStorer's behavior. Each provide() seals the previous buffer
 /// into a volume-keyed dict. fetch() serves from the volume store.
+private enum VolumeGroupingStoreError: Error, Equatable {
+    case unbalancedVolumeScope(expected: String?, actual: String)
+    case storeOutsideVolume(String)
+}
+
 private final class VolumeGroupingStore: VolumeAwareStorer, @unchecked Sendable {
+    private struct Scope {
+        let root: String
+        var buffer: [String: Data]
+    }
+
     private let lock = NSLock()
-    private var activeRoot: String?
-    private var buffer: [String: Data] = [:]
+    private var scopes: [Scope] = []
     private(set) var volumes: [String: [String: Data]] = [:]
 
     var providedRoots: [String] {
@@ -213,34 +222,69 @@ private final class VolumeGroupingStore: VolumeAwareStorer, @unchecked Sendable 
 
     func enterVolume(rootCID: String) throws {
         lock.withLock {
-            if let root = activeRoot, !buffer.isEmpty {
-                volumes[root] = buffer
+            scopes.append(Scope(root: rootCID, buffer: [:]))
+        }
+    }
+
+    func exitVolume(rootCID: String) throws {
+        try lock.withLock {
+            let expected = scopes.last?.root
+            guard expected == rootCID else {
+                throw VolumeGroupingStoreError.unbalancedVolumeScope(
+                    expected: expected,
+                    actual: rootCID
+                )
             }
-            activeRoot = rootCID
-            buffer = [:]
+
+            let completed = scopes.removeLast()
+            volumes[completed.root] = completed.buffer
+
+            // The nested Volume is independently stored, while its root
+            // bytes also record the owned parent-to-child boundary edge.
+            if let parentIndex = scopes.indices.last,
+               let childRootBytes = completed.buffer[completed.root] {
+                scopes[parentIndex].buffer[completed.root] = childRootBytes
+            }
+        }
+    }
+
+    func abortVolume(rootCID: String) {
+        lock.withLock {
+            guard let index = scopes.lastIndex(where: { $0.root == rootCID }) else {
+                return
+            }
+            scopes.removeSubrange(index...)
         }
     }
 
     func store(rawCid: String, data: Data) throws {
-        lock.withLock { buffer[rawCid] = data }
+        try lock.withLock {
+            guard let index = scopes.indices.last else {
+                throw VolumeGroupingStoreError.storeOutsideVolume(rawCid)
+            }
+            scopes[index].buffer[rawCid] = data
+        }
     }
 
     func contains(rawCid: String) -> Bool { false }
 
     func seal() {
         lock.withLock {
-            if let root = activeRoot, !buffer.isEmpty {
-                volumes[root] = buffer
-            }
-            activeRoot = nil
-            buffer = [:]
+            precondition(
+                scopes.isEmpty,
+                "all Volume scopes must exit or abort before the grouped store is sealed"
+            )
         }
     }
 
     func allData() -> [String: Data] {
         lock.withLock {
             var all: [String: Data] = [:]
-            for (_, entries) in volumes { for (k, v) in entries { all[k] = v } }
+            for (_, entries) in volumes {
+                for (cid, data) in entries {
+                    all[cid] = data
+                }
+            }
             return all
         }
     }
