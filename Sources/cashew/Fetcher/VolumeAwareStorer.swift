@@ -9,22 +9,9 @@
 ///
 /// During an open scope, every `store(rawCid:data:)` call is also a membership event
 /// for that Volume. Implementations may deduplicate the underlying content bytes, but
-/// MUST still record the CID in each successfully completed boundary that owns it.
+/// MUST still record the CID in each successfully completed boundary that contains it.
 public protocol VolumeAwareStorer: Storer {
     func enterVolume(rootCID: String) throws
-
-    /// Record that the active Volume structurally owns another Volume boundary.
-    ///
-    /// This is an ownership/retention edge only. It MUST NOT assert that the nested
-    /// Volume's bytes are currently available. Cashew emits the event for every owned
-    /// nested ``Volume`` child edge or Header-valued RadixNode entry, whether or not it
-    /// is materialized locally. `Reference` values never produce this event because
-    /// they are intentionally outside the owner's stored closure.
-    ///
-    /// Implementations SHOULD make repeated inclusion of the same root idempotent
-    /// within one active scope.
-    func includeNestedVolume(rootCID: String) throws
-
     func exitVolume(rootCID: String) throws
 
     /// Abandon the active scope for `rootCID` after a failed traversal.

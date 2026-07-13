@@ -221,11 +221,15 @@ does not change CIDs, and resolution treats it exactly like any other `Header`
 fetch path). Its behavioral role is on the **storage/retention** side:
 
 - On storage, the recursive walker emits `enterVolume`/`exitVolume` calls to a
-  `VolumeAwareStorer` at each Volume boundary, and deliberately stores non-Volume
-  children *before* Volume children so each volume's contiguous byte group stays
-  intact (`Sources/cashew/Fetcher/Node+store.swift`,
+  `VolumeAwareStorer` at each Volume boundary. It completes the current Volume's
+  ordinary bytes before storing any materialized nested Volumes under their own
+  independent scopes (`Sources/cashew/Fetcher/Node+store.swift`,
   `Sources/cashew/Fetcher/VolumeAwareStorer.swift`). This groups bytes by volume
   for contiguous storage and per-volume pinning/garbage-collection.
+
+- Relationships between Volume roots remain encoded in the content-addressed
+  nodes. The storage lifecycle does not duplicate them as retention metadata;
+  applications that retain several related Volumes pin each root explicitly.
 
 Volumes nest, so a tree can carry boundaries at multiple levels.
 

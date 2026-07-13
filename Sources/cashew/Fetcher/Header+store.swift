@@ -22,7 +22,7 @@ extension Header {
         return nodeData
     }
 
-    /// Store one ordinary Header and every ordinary owned descendant inside the
+    /// Store one ordinary Header and every ordinary descendant inside the
     /// currently active Volume boundary, stopping at nested Volume boundaries.
     ///
     /// The returned materialized nested Volumes are stored independently only after
@@ -36,26 +36,8 @@ extension Header {
 
 public extension Header {
     func storeRecursively(storer: Storer) throws {
-        guard let node else {
-            // A Volume-aware walk is constructing one complete availability unit.
-            // Every ordinary Header reached through Node.properties() is therefore
-            // owned by the current Volume boundary and must be materialized so its
-            // bytes and owned descendants can be included. Plain Storers retain the
-            // historical best-effort behavior for callers intentionally persisting
-            // only the materialized portion of a generic Header graph.
-            if storer is VolumeAwareStorer {
-                throw DataErrors.nodeNotAvailable
-            }
-            return
-        }
-
-        // `contains` answers whether the bytes already exist, not whether this CID
-        // has been recorded as a member of the Volume currently being traversed.
-        // A VolumeAwareStorer must observe `store` for every owned node in every
-        // boundary; it may deduplicate the underlying bytes internally.
-        if !(storer is VolumeAwareStorer), storer.contains(rawCid: rawCID) {
-            return
-        }
+        guard let node else { return }
+        if storer.contains(rawCid: rawCID) { return }
 
         try storer.store(rawCid: rawCID, data: try serializedDataForStorage(storer: storer))
         try node.storeRecursively(storer: storer)

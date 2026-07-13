@@ -8,9 +8,8 @@ import ArrayTrie
 /// means "some chain's pin set references this Volume root" — only works if every
 /// trie-internal link is itself a Volume boundary that can be pinned independently.
 /// If a single internal header drops Volume conformance, its subtree becomes
-/// protected only transitively by the nearest outer Volume, and any sweep that
-/// collects that outer Volume also collects the subtree — even if a different
-/// chain still needs it. These tests would catch that.
+/// inseparable from the nearest outer Volume and cannot be retained or evicted as
+/// an independent unit. These tests would catch that.
 @Suite("Volume Merkle Dictionary — all headers are Volumes")
 struct VolumeMerkleDictionaryTests {
 
@@ -203,7 +202,6 @@ private struct Company: Node, Sendable {
 /// into a volume-keyed dict. fetch() serves from the volume store.
 private enum VolumeGroupingStoreError: Error, Equatable {
     case unbalancedVolumeScope(expected: String?, actual: String)
-    case nestedVolumeOutsideVolume(String)
     case storeOutsideVolume(String)
 }
 
@@ -211,13 +209,11 @@ private final class VolumeGroupingStore: VolumeAwareStorer, @unchecked Sendable 
     private struct Scope {
         let root: String
         var buffer: [String: Data]
-        var nestedRoots: Set<String>
     }
 
     private let lock = NSLock()
     private var scopes: [Scope] = []
     private(set) var volumes: [String: [String: Data]] = [:]
-    private(set) var nestedVolumeRoots: [String: Set<String>] = [:]
 
     var providedRoots: [String] {
         lock.withLock { Array(volumes.keys) }
@@ -225,16 +221,7 @@ private final class VolumeGroupingStore: VolumeAwareStorer, @unchecked Sendable 
 
     func enterVolume(rootCID: String) throws {
         lock.withLock {
-            scopes.append(Scope(root: rootCID, buffer: [:], nestedRoots: []))
-        }
-    }
-
-    func includeNestedVolume(rootCID: String) throws {
-        try lock.withLock {
-            guard let index = scopes.indices.last else {
-                throw VolumeGroupingStoreError.nestedVolumeOutsideVolume(rootCID)
-            }
-            scopes[index].nestedRoots.insert(rootCID)
+            scopes.append(Scope(root: rootCID, buffer: [:]))
         }
     }
 
@@ -250,7 +237,6 @@ private final class VolumeGroupingStore: VolumeAwareStorer, @unchecked Sendable 
 
             let completed = scopes.removeLast()
             volumes[completed.root] = completed.buffer
-            nestedVolumeRoots[completed.root] = completed.nestedRoots
         }
     }
 
@@ -512,7 +498,7 @@ struct VolumeRoundTripTests {
         }
     }
 
-    @Test("Store fires provide() at every Volume boundary during storeRecursively")
+    @Test("Store opens an independent scope at every Volume boundary")
     func storeFiresProvideAtBoundaries() throws {
         let dict = try Dict()
             .inserting(key: "alice", value: "v1")
@@ -525,8 +511,6 @@ struct VolumeRoundTripTests {
 
         #expect(store.volumes[outer.rawCID] != nil,
                 "provide() should fire for the outer Volume root during store")
-        #expect(store.nestedVolumeRoots[outer.rawCID] == Set(dict.children.values.map(\.rawCID)),
-                "outer Volume should record each directly owned nested boundary")
 
         var headerCIDs: Set<String> = []
         try VolumeMerkleDictionaryTests.visitAllHeaders(in: dict) { header in

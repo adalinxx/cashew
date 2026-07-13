@@ -8,14 +8,14 @@ import Crypto
 ///
 /// A Volume has the same CID and resolution behavior as any other ``Header``.
 /// Its distinct role is on the storage side: a ``VolumeAwareStorer`` treats the
-/// Volume root plus all ordinary owned descendants up to the next Volume boundary
+/// Volume root plus all ordinary descendants up to the next Volume boundary
 /// as one complete availability unit.
 ///
 /// Volumes may be nested. The enclosing node commits to the nested Volume's CID,
 /// while the nested Volume's bytes remain independently available, retainable, and
-/// evictable. Storing an outer Volume therefore records the owned nested-boundary
-/// edge whether or not the nested Volume is currently materialized. `Reference`
-/// fields are not Headers and remain outside this owned closure.
+/// evictable. Storing an outer Volume does not store a separate relationship to the
+/// nested Volume; that relationship remains encoded in the content-addressed node.
+/// `Reference` fields are not Headers and are not entries in this Volume.
 ///
 /// ```swift
 /// typealias UserVolume = VolumeImpl<MerkleDictionaryImpl<String>>

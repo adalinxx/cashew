@@ -24,9 +24,8 @@ extension Volume {
             }
 
             // A nested Volume is an independent availability unit. The parent has
-            // already published its structural edge and complete ordinary contents;
-            // failure to store a materialized child cannot retroactively make the
-            // parent partial.
+            // already completed its ordinary contents; a materialized child is then
+            // stored under its own lifecycle without changing the parent boundary.
             for nested in nestedVolumes {
                 try nested.storeRecursively(storer: volumeAware)
             }

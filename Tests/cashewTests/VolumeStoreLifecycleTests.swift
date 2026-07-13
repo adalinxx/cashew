@@ -78,9 +78,7 @@ final class VolumeStoreLifecycleTests: XCTestCase {
     private enum InjectedFailure: Error, Equatable {
         case enter(String)
         case store(String)
-        case include(String)
         case exit(String)
-        case nestedOutsideVolume(String)
         case mismatchedExit(expected: String?, actual: String)
     }
 
@@ -89,14 +87,12 @@ final class VolumeStoreLifecycleTests: XCTestCase {
         var contained = Set<String>()
         var failOnEnterCID: String?
         var failOnStoreCID: String?
-        var failOnIncludeCID: String?
         var failOnExitCID: String?
         var keys: [String: SymmetricKey] = [:]
 
         private(set) var stack: [String] = []
         private(set) var abortCounts: [String: Int] = [:]
         private(set) var completedRoots: [String] = []
-        private(set) var nestedVolumeRoots: [String: Set<String>] = [:]
         private(set) var storedData: [String: Data] = [:]
 
         func enterVolume(rootCID: String) throws {
@@ -105,17 +101,6 @@ final class VolumeStoreLifecycleTests: XCTestCase {
             if failOnEnterCID == rootCID {
                 throw InjectedFailure.enter(rootCID)
             }
-        }
-
-        func includeNestedVolume(rootCID: String) throws {
-            guard let owner = stack.last else {
-                throw InjectedFailure.nestedOutsideVolume(rootCID)
-            }
-            events.append("include:\(rootCID)")
-            if failOnIncludeCID == rootCID {
-                throw InjectedFailure.include(rootCID)
-            }
-            nestedVolumeRoots[owner, default: []].insert(rootCID)
         }
 
         func exitVolume(rootCID: String) throws {
@@ -135,10 +120,6 @@ final class VolumeStoreLifecycleTests: XCTestCase {
             events.append("abort:\(rootCID)")
             abortCounts[rootCID, default: 0] += 1
             guard let index = stack.lastIndex(of: rootCID) else { return }
-            let abortedRoots = stack[index...]
-            for abortedRoot in abortedRoots {
-                nestedVolumeRoots.removeValue(forKey: abortedRoot)
-            }
             stack.removeSubrange(index...)
         }
 
@@ -253,7 +234,7 @@ final class VolumeStoreLifecycleTests: XCTestCase {
         XCTAssertTrue(storer.events.isEmpty)
     }
 
-    func testUnresolvedOwnedNonVolumeChildAbortsOuterVolume() throws {
+    func testUnresolvedSameBoundaryChildAbortsOuterVolume() throws {
         let child = try HeaderImpl<Leaf>(node: Leaf(value: "owned"))
         let unresolvedChild = HeaderImpl<Leaf>(rawCID: child.rawCID)
         let outer = try VolumeImpl<OwnedChildNode>(node: OwnedChildNode(child: unresolvedChild))
@@ -292,7 +273,7 @@ final class VolumeStoreLifecycleTests: XCTestCase {
         XCTAssertTrue(storer.stack.isEmpty)
     }
 
-    func testUnresolvedNestedVolumeRecordsStableEdgeAndCompletesOuter() throws {
+    func testUnresolvedNestedVolumeCompletesOuterWithoutStoringChild() throws {
         let resolvedChild = try VolumeImpl<Leaf>(node: Leaf(value: "independent"))
         let unresolvedChild = VolumeImpl<Leaf>(rawCID: resolvedChild.rawCID)
         let outer = try VolumeImpl<NestedVolumeNode>(node: NestedVolumeNode(child: unresolvedChild))
@@ -303,15 +284,13 @@ final class VolumeStoreLifecycleTests: XCTestCase {
         XCTAssertEqual(storer.events, [
             "enter:\(outer.rawCID)",
             "store:\(outer.rawCID)",
-            "include:\(resolvedChild.rawCID)",
             "exit:\(outer.rawCID)",
         ])
-        XCTAssertEqual(storer.nestedVolumeRoots[outer.rawCID], [resolvedChild.rawCID])
         XCTAssertEqual(storer.completedRoots, [outer.rawCID])
         XCTAssertTrue(storer.stack.isEmpty)
     }
 
-    func testNestedOwnershipIsIndependentOfChildHydration() throws {
+    func testNestedVolumeStorageIsIndependentOfParentCompletion() throws {
         let child = try VolumeImpl<Leaf>(node: Leaf(value: "nested"))
         let hydratedOuter = try VolumeImpl<NestedVolumeNode>(node: NestedVolumeNode(child: child))
         let unresolvedChild = VolumeImpl<Leaf>(rawCID: child.rawCID)
@@ -324,36 +303,14 @@ final class VolumeStoreLifecycleTests: XCTestCase {
         try hydratedOuter.storeRecursively(storer: hydratedStore)
         try unhydratedOuter.storeRecursively(storer: unhydratedStore)
 
-        XCTAssertEqual(
-            hydratedStore.nestedVolumeRoots[hydratedOuter.rawCID],
-            unhydratedStore.nestedVolumeRoots[unhydratedOuter.rawCID]
-        )
-        XCTAssertEqual(hydratedStore.nestedVolumeRoots[hydratedOuter.rawCID], [child.rawCID])
-
-        XCTAssertEqual(Array(hydratedStore.events.prefix(4)), [
+        XCTAssertEqual(Array(hydratedStore.events.prefix(3)), [
             "enter:\(hydratedOuter.rawCID)",
             "store:\(hydratedOuter.rawCID)",
-            "include:\(child.rawCID)",
             "exit:\(hydratedOuter.rawCID)",
         ])
-        XCTAssertEqual(unhydratedStore.events, Array(hydratedStore.events.prefix(4)))
+        XCTAssertEqual(unhydratedStore.events, Array(hydratedStore.events.prefix(3)))
         XCTAssertTrue(hydratedStore.completedRoots.contains(child.rawCID))
         XCTAssertFalse(unhydratedStore.completedRoots.contains(child.rawCID))
-    }
-
-    func testNestedBoundaryRecordingFailureAbortsOuter() throws {
-        let child = try VolumeImpl<Leaf>(node: Leaf(value: "nested"))
-        let outer = try VolumeImpl<NestedVolumeNode>(node: NestedVolumeNode(child: child))
-        let storer = RecordingStorer()
-        storer.failOnIncludeCID = child.rawCID
-
-        XCTAssertThrowsError(try outer.storeRecursively(storer: storer)) { error in
-            XCTAssertEqual(error as? InjectedFailure, .include(child.rawCID))
-        }
-
-        XCTAssertFalse(storer.completedRoots.contains(outer.rawCID))
-        XCTAssertFalse(storer.completedRoots.contains(child.rawCID))
-        XCTAssertTrue(storer.stack.isEmpty)
     }
 
     func testNestedChildFailureDoesNotUnpublishCompletedOuterVolume() throws {
@@ -369,7 +326,6 @@ final class VolumeStoreLifecycleTests: XCTestCase {
         XCTAssertEqual(storer.events, [
             "enter:\(outer.rawCID)",
             "store:\(outer.rawCID)",
-            "include:\(child.rawCID)",
             "exit:\(outer.rawCID)",
             "enter:\(child.rawCID)",
             "store:\(child.rawCID)",
@@ -377,8 +333,18 @@ final class VolumeStoreLifecycleTests: XCTestCase {
         ])
         XCTAssertTrue(storer.completedRoots.contains(outer.rawCID))
         XCTAssertFalse(storer.completedRoots.contains(child.rawCID))
-        XCTAssertEqual(storer.nestedVolumeRoots[outer.rawCID], [child.rawCID])
         XCTAssertTrue(storer.stack.isEmpty)
+    }
+
+    func testDirectOrdinaryHeaderKeepsBestEffortSemanticsWithVolumeAwareStorer() throws {
+        let materialized = try HeaderImpl<Leaf>(node: Leaf(value: "ordinary"))
+        let unresolved = HeaderImpl<Leaf>(rawCID: materialized.rawCID)
+        let storer = RecordingStorer()
+        storer.contained.insert(materialized.rawCID)
+
+        XCTAssertNoThrow(try unresolved.storeRecursively(storer: storer))
+        XCTAssertNoThrow(try materialized.storeRecursively(storer: storer))
+        XCTAssertTrue(storer.events.isEmpty)
     }
 
     func testOuterExitFailureDoesNotStartNestedChild() throws {
