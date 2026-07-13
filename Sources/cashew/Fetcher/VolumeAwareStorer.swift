@@ -6,6 +6,10 @@
 ///
 /// Conformers MUST NOT publish an entered scope unless the matching exit succeeds.
 /// This keeps "Volume available" binary: a complete Volume is present or it is not.
+///
+/// During an open scope, every `store(rawCid:data:)` call is also a membership event
+/// for that Volume. Implementations may deduplicate the underlying content bytes, but
+/// MUST still record the CID in each successfully completed boundary that owns it.
 public protocol VolumeAwareStorer: Storer {
     func enterVolume(rootCID: String) throws
     func exitVolume(rootCID: String) throws
@@ -14,6 +18,8 @@ public protocol VolumeAwareStorer: Storer {
     ///
     /// This method is deliberately non-throwing: it is invoked while propagating
     /// the original storage error and must leave no partially traversed scope that
-    /// a later flush could mistake for a complete Volume.
+    /// a later flush could mistake for a complete Volume. Implementations MUST make
+    /// cleanup idempotent because a caller may defensively repeat it after a nested
+    /// failure has already removed the matching scope.
     func abortVolume(rootCID: String)
 }
