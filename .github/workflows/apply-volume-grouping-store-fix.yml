@@ -1,0 +1,134 @@
+name: Apply VolumeGroupingStore lifecycle migration
+
+on:
+  push:
+    branches:
+      - agent/foundational-architecture-alignment
+    paths:
+      - .github/workflows/apply-volume-grouping-store-fix.yml
+
+permissions:
+  contents: write
+
+jobs:
+  migrate-test-fixture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: agent/foundational-architecture-alignment
+          fetch-depth: 0
+
+      - name: Replace legacy single-buffer fixture
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path("Tests/cashewTests/VolumeMerkleDictionaryTests.swift")
+          text = path.read_text()
+          start = text.index("private final class VolumeGroupingStore")
+          marker = "\n\n/// Fetcher that serves from a VolumeGroupingStore's grouped volumes"
+          end = text.index(marker, start)
+
+          replacement = r'''private enum VolumeGroupingStoreError: Error, Equatable {
+              case unbalancedVolumeScope(expected: String?, actual: String)
+              case storeOutsideVolume(String)
+          }
+
+          private final class VolumeGroupingStore: VolumeAwareStorer, @unchecked Sendable {
+              private struct Scope {
+                  let root: String
+                  var buffer: [String: Data]
+              }
+
+              private let lock = NSLock()
+              private var scopes: [Scope] = []
+              private(set) var volumes: [String: [String: Data]] = [:]
+
+              var providedRoots: [String] {
+                  lock.withLock { Array(volumes.keys) }
+              }
+
+              func enterVolume(rootCID: String) throws {
+                  lock.withLock {
+                      scopes.append(Scope(root: rootCID, buffer: [:]))
+                  }
+              }
+
+              func exitVolume(rootCID: String) throws {
+                  try lock.withLock {
+                      let expected = scopes.last?.root
+                      guard expected == rootCID else {
+                          throw VolumeGroupingStoreError.unbalancedVolumeScope(
+                              expected: expected,
+                              actual: rootCID
+                          )
+                      }
+
+                      let completed = scopes.removeLast()
+                      volumes[completed.root] = completed.buffer
+
+                      // The nested Volume is independently stored, while its root
+                      // bytes also record the owned parent-to-child boundary edge.
+                      if let parentIndex = scopes.indices.last,
+                         let childRootBytes = completed.buffer[completed.root] {
+                          scopes[parentIndex].buffer[completed.root] = childRootBytes
+                      }
+                  }
+              }
+
+              func abortVolume(rootCID: String) {
+                  lock.withLock {
+                      guard let index = scopes.lastIndex(where: { $0.root == rootCID }) else {
+                          return
+                      }
+                      scopes.removeSubrange(index...)
+                  }
+              }
+
+              func store(rawCid: String, data: Data) throws {
+                  try lock.withLock {
+                      guard let index = scopes.indices.last else {
+                          throw VolumeGroupingStoreError.storeOutsideVolume(rawCid)
+                      }
+                      scopes[index].buffer[rawCid] = data
+                  }
+              }
+
+              func contains(rawCid: String) -> Bool { false }
+
+              func seal() {
+                  lock.withLock {
+                      precondition(
+                          scopes.isEmpty,
+                          "all Volume scopes must exit or abort before the grouped store is sealed"
+                      )
+                  }
+              }
+
+              func allData() -> [String: Data] {
+                  lock.withLock {
+                      var all: [String: Data] = [:]
+                      for (_, entries) in volumes {
+                          for (cid, data) in entries {
+                              all[cid] = data
+                          }
+                      }
+                      return all
+                  }
+              }
+          }'''
+
+          path.write_text(text[:start] + replacement + text[end:])
+          PY
+
+      - name: Commit migration and remove temporary workflow
+        shell: bash
+        run: |
+          rm .github/workflows/apply-volume-grouping-store-fix.yml
+          git config user.name "Lattice Architecture"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Tests/cashewTests/VolumeMerkleDictionaryTests.swift .github/workflows/apply-volume-grouping-store-fix.yml
+          git commit -m "migrate volume grouping lifecycle fixture"
+          git push origin HEAD:agent/foundational-architecture-alignment
