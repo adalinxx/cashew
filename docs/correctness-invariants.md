@@ -10,7 +10,7 @@ When entry, storage, structural traversal, nested-edge recording, or exit throws
 
 ## CASHEW-VOLUME-003 — unresolved owned nodes fail closed
 
-An ordinary non-Volume header returned by `Node.properties()` is owned by the current Volume boundary. If its node is unresolved during a Volume-aware traversal, the traversal throws and the enclosing Volume aborts.
+An ordinary non-Volume header returned by `Node.properties()`, or stored as a Header-valued `RadixNode.value`, is owned by the current Volume boundary. If its node is unresolved during a Volume-aware traversal, the traversal throws and the enclosing Volume aborts.
 
 ## CASHEW-VOLUME-004 — declared ownership is internally consistent
 

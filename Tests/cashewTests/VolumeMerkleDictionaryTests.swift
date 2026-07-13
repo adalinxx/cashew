@@ -203,6 +203,7 @@ private struct Company: Node, Sendable {
 /// into a volume-keyed dict. fetch() serves from the volume store.
 private enum VolumeGroupingStoreError: Error, Equatable {
     case unbalancedVolumeScope(expected: String?, actual: String)
+    case nestedVolumeOutsideVolume(String)
     case storeOutsideVolume(String)
 }
 
@@ -210,11 +211,13 @@ private final class VolumeGroupingStore: VolumeAwareStorer, @unchecked Sendable 
     private struct Scope {
         let root: String
         var buffer: [String: Data]
+        var nestedRoots: Set<String>
     }
 
     private let lock = NSLock()
     private var scopes: [Scope] = []
     private(set) var volumes: [String: [String: Data]] = [:]
+    private(set) var nestedVolumeRoots: [String: Set<String>] = [:]
 
     var providedRoots: [String] {
         lock.withLock { Array(volumes.keys) }
@@ -222,7 +225,16 @@ private final class VolumeGroupingStore: VolumeAwareStorer, @unchecked Sendable 
 
     func enterVolume(rootCID: String) throws {
         lock.withLock {
-            scopes.append(Scope(root: rootCID, buffer: [:]))
+            scopes.append(Scope(root: rootCID, buffer: [:], nestedRoots: []))
+        }
+    }
+
+    func includeNestedVolume(rootCID: String) throws {
+        try lock.withLock {
+            guard let index = scopes.indices.last else {
+                throw VolumeGroupingStoreError.nestedVolumeOutsideVolume(rootCID)
+            }
+            scopes[index].nestedRoots.insert(rootCID)
         }
     }
 
@@ -238,13 +250,7 @@ private final class VolumeGroupingStore: VolumeAwareStorer, @unchecked Sendable 
 
             let completed = scopes.removeLast()
             volumes[completed.root] = completed.buffer
-
-            // The nested Volume is independently stored, while its root
-            // bytes also record the owned parent-to-child boundary edge.
-            if let parentIndex = scopes.indices.last,
-               let childRootBytes = completed.buffer[completed.root] {
-                scopes[parentIndex].buffer[completed.root] = childRootBytes
-            }
+            nestedVolumeRoots[completed.root] = completed.nestedRoots
         }
     }
 
@@ -519,6 +525,8 @@ struct VolumeRoundTripTests {
 
         #expect(store.volumes[outer.rawCID] != nil,
                 "provide() should fire for the outer Volume root during store")
+        #expect(store.nestedVolumeRoots[outer.rawCID] == Set(dict.children.values.map(\.rawCID)),
+                "outer Volume should record each directly owned nested boundary")
 
         var headerCIDs: Set<String> = []
         try VolumeMerkleDictionaryTests.visitAllHeaders(in: dict) { header in

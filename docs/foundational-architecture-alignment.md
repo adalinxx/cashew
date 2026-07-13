@@ -5,7 +5,7 @@ This change aligns Cashew's generic storage traversal with the Lattice foundatio
 ## Structural contract
 
 - `enterVolume(rootCID:)` opens one traversal scope.
-- The Volume root and every ordinary owned child returned by `Node.properties()` are members of that scope.
+- The Volume root, every ordinary owned child returned by `Node.properties()`, and every Header-valued `RadixNode.value` are members of that scope.
 - A property named by `Node.properties()` must resolve to a Header through `get(property:)`; structural disagreement fails closed.
 - An unresolved ordinary non-Volume child is an incomplete owned traversal and fails closed.
 - Every owned nested Volume emits `includeNestedVolume(rootCID:)`, regardless of whether the child is locally materialized.
@@ -16,7 +16,7 @@ This change aligns Cashew's generic storage traversal with the Lattice foundatio
 - `contains(rawCid:)` may optimize ordinary content storage, but cannot suppress membership recording during a Volume-aware traversal.
 - Header and Volume roots share one canonical serialization/encryption path.
 
-This remains generic. Cashew does not decide application workflow completeness, storage retention policy, peer selection, consensus validity, or which nested Volumes a particular operation requires. It enforces only the ownership and boundary semantics already expressed by `Node.properties()`, `Volume`, and the absence of `Reference` from child traversal.
+This remains generic. Cashew does not decide application workflow completeness, storage retention policy, peer selection, consensus validity, or which nested Volumes a particular operation requires. It preserves the ownership semantics already expressed by existing recursive storage, while `Volume` defines availability boundaries and `Reference` remains outside child traversal.
 
 ## Correctness evidence
 

@@ -241,6 +241,18 @@ final class VolumeStoreLifecycleTests: XCTestCase {
         XCTAssertTrue(storer.stack.isEmpty)
     }
 
+    func testUnresolvedVolumeRadixHeaderUsesVolumeLifecycle() throws {
+        let node = VolumeRadixNodeImpl<String>(prefix: "root", value: "value", children: [:])
+        let resolved = try VolumeRadixHeaderImpl<String>(node: node)
+        let unresolved = VolumeRadixHeaderImpl<String>(rawCID: resolved.rawCID)
+        let storer = RecordingStorer()
+
+        XCTAssertThrowsError(try unresolved.storeRecursively(storer: storer)) { error in
+            XCTAssertEqual(error as? DataErrors, .nodeNotAvailable)
+        }
+        XCTAssertTrue(storer.events.isEmpty)
+    }
+
     func testUnresolvedOwnedNonVolumeChildAbortsOuterVolume() throws {
         let child = try HeaderImpl<Leaf>(node: Leaf(value: "owned"))
         let unresolvedChild = HeaderImpl<Leaf>(rawCID: child.rawCID)
@@ -398,8 +410,47 @@ final class VolumeStoreLifecycleTests: XCTestCase {
         )
     }
 
+    func testHeaderValuedRadixEntryIsStoredWithinVolume() throws {
+        let child = try HeaderImpl<Leaf>(node: Leaf(value: "owned"))
+        let dictionary = try MerkleDictionaryImpl<HeaderImpl<Leaf>>()
+            .inserting(key: "child", value: child)
+        let outer = try VolumeImpl(node: dictionary)
+        let storer = RecordingStorer()
+
+        try outer.storeRecursively(storer: storer)
+
+        XCTAssertTrue(storer.events.contains("store:\(child.rawCID)"))
+        XCTAssertEqual(storer.completedRoots, [outer.rawCID])
+    }
+
+    func testUnresolvedHeaderValuedRadixEntryAbortsVolume() throws {
+        let resolved = try HeaderImpl<Leaf>(node: Leaf(value: "owned"))
+        let unresolved = HeaderImpl<Leaf>(rawCID: resolved.rawCID)
+        let dictionary = try MerkleDictionaryImpl<HeaderImpl<Leaf>>()
+            .inserting(key: "child", value: unresolved)
+        let outer = try VolumeImpl(node: dictionary)
+        let storer = RecordingStorer()
+
+        XCTAssertThrowsError(try outer.storeRecursively(storer: storer)) { error in
+            XCTAssertEqual(error as? DataErrors, .nodeNotAvailable)
+        }
+        XCTAssertEqual(storer.events.last, "abort:\(outer.rawCID)")
+        XCTAssertTrue(storer.completedRoots.isEmpty)
+    }
+
     func testPlainStorerRetainsContentDeduplicationFastPath() throws {
         let header = try HeaderImpl<Leaf>(node: Leaf(value: "shared"))
+        let storer = PlainRecordingStorer()
+        storer.contained.insert(header.rawCID)
+
+        try header.storeRecursively(storer: storer)
+
+        XCTAssertTrue(storer.stored.isEmpty)
+    }
+
+    func testPlainStorerRetainsVolumeRadixHeaderDeduplicationFastPath() throws {
+        let node = VolumeRadixNodeImpl<String>(prefix: "root", value: "value", children: [:])
+        let header = try VolumeRadixHeaderImpl<String>(node: node)
         let storer = PlainRecordingStorer()
         storer.contained.insert(header.rawCID)
 

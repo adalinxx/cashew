@@ -1,7 +1,7 @@
 import Foundation
 
-public extension Volume {
-    func storeRecursively(storer: Storer) throws {
+extension Volume {
+    func storeVolumeRecursively(storer: Storer) throws {
         // Calling storage on a Volume root is a request to publish that complete
         // availability unit. An unresolved root cannot be published.
         guard let node else { throw DataErrors.nodeNotAvailable }
@@ -34,5 +34,11 @@ public extension Volume {
             try storer.store(rawCid: rawCID, data: dataToStore)
             try node.storeRecursively(storer: storer)
         }
+    }
+}
+
+public extension Volume {
+    func storeRecursively(storer: Storer) throws {
+        try storeVolumeRecursively(storer: storer)
     }
 }

@@ -17,9 +17,9 @@ public protocol VolumeAwareStorer: Storer {
     ///
     /// This is an ownership/retention edge only. It MUST NOT assert that the nested
     /// Volume's bytes are currently available. Cashew emits the event for every owned
-    /// nested ``Volume`` returned by `Node.properties()`, whether or not that child is
-    /// materialized locally. `Reference` values never produce this event because they
-    /// are intentionally outside the owner's stored closure.
+    /// nested ``Volume`` child edge or Header-valued RadixNode entry, whether or not it
+    /// is materialized locally. `Reference` values never produce this event because
+    /// they are intentionally outside the owner's stored closure.
     ///
     /// Implementations SHOULD make repeated inclusion of the same root idempotent
     /// within one active scope.
