@@ -1,6 +1,10 @@
 public extension Volume {
     func storeRecursively(storer: Storer) throws {
-        guard let node = node else { return }
+        // Calling storage on a Volume root is a request to publish that complete
+        // availability unit. An unresolved root cannot be published. Unresolved
+        // nested Volumes are skipped by Node.storeRecursively because each nested
+        // boundary is an independent availability unit.
+        guard let node = node else { throw DataErrors.nodeNotAvailable }
         guard let nodeData = node.toData() else { throw DataErrors.serializationFailed }
         if let volumeAware = storer as? VolumeAwareStorer {
             try volumeAware.enterVolume(rootCID: rawCID)
