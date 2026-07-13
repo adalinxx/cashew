@@ -1,7 +1,7 @@
 /// Errors from data serialization, CID computation, encryption, and structural storage traversal.
 public enum DataErrors: Error, Equatable {
     case nodeNotAvailable
-    /// `Node.properties()` declared an owned child that `get(property:)` did not return.
+    /// `Node.properties()` declared a child that `get(property:)` did not return.
     /// A complete-Volume traversal cannot silently omit that child.
     case missingDeclaredChild(String)
     case serializationFailed
