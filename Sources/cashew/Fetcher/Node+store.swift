@@ -10,8 +10,17 @@ public extension Node {
         for property in props {
             guard let header = get(property: property) else { continue }
             if header is any Volume {
-                volumeChildren.append(header)
+                // A nested Volume is an independent availability unit. Its CID is
+                // already committed by this node's serialized bytes, so an absent
+                // nested Volume does not make the enclosing Volume partial. Store
+                // it independently only when its own node is materialized.
+                if header.node != nil {
+                    volumeChildren.append(header)
+                }
             } else {
+                // Non-Volume properties are owned by the current boundary. The
+                // Header storage implementation fails closed when one is unresolved
+                // during a Volume-aware traversal.
                 try header.storeRecursively(storer: storer)
             }
         }
