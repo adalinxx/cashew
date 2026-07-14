@@ -1,5 +1,22 @@
 # Correctness invariants
 
+## CASHEW-SPARSE-001 — storage selection matches resolution
+
+`Header.store(paths:storer:)` emits exactly the blocks that resolving the same
+`ResolutionStrategy` paths would fetch from a CID-only root. This includes
+targeted, recursive, list, range, and compressed-radix traversal.
+
+## CASHEW-SPARSE-002 — sparse writes are verified, not complete
+
+Every emitted block hashes to its declared CID. Unresolved references outside the
+selected paths are allowed, while selected unresolved references fail before the
+single `Storer.store(entries:)` call. Sparse writes make no retention guarantee.
+
+## CASHEW-SPARSE-003 — read-through writes follow verification
+
+`resolve(..., cache:)` stores fetched bytes only after their CID has been verified.
+The cache remains unchanged when a source returns mismatched bytes.
+
 ## CASHEW-VOLUME-001 — only complete boundaries are emitted
 
 Cashew serializes a Volume root and every same-boundary Header before making the
@@ -50,4 +67,5 @@ operation. Distinct targeted subplans through that Volume are still traversed.
 Cashew enforces boundary completeness and follows caller-provided paths. It does not
 infer application retention, workflow completeness, validity, or canonicity.
 
-Established by `StoragePlanTests` and `VolumeMerkleDictionaryTests`.
+Established by `SparseStorageTests`, `StoragePlanTests`, and
+`VolumeMerkleDictionaryTests`.

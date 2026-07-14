@@ -276,8 +276,8 @@ the SHA-256 hash of the key (for key lookup) and the GCM nonce.
 
 On read, `Header.decryptIfNeeded` uses the `Fetcher`-as-`KeyProvider` to look up
 the key by `keyHash` and decrypt before decoding. On write,
-`Header.storeRecursively` re-seals from `encryptionInfo` using the same nonce so
-the stored ciphertext (and thus the CID) is stable. Encrypted and plaintext
+`Header.store` and `Volume.store` re-seal from `encryptionInfo` using the same
+nonce so the stored ciphertext (and thus the CID) is stable. Encrypted and plaintext
 nodes coexist in the same tree; only headers with non-nil `encryptionInfo` are
 encrypted, and a header's textual form is `enc:<keyHash>:<iv>:<cid>`.
 

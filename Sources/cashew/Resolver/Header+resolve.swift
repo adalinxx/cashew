@@ -57,6 +57,44 @@ public extension Header {
         try await resolveNode(fetcher: fetcher)
     }
 
+    /// Resolve through `fetcher` and persist each fetched block after CID verification.
+    func resolve(
+        paths: [[String]: ResolutionStrategy],
+        fetcher: any Fetcher,
+        cache: any Storer
+    ) async throws -> Self {
+        try await resolve(
+            paths: paths,
+            fetcher: CachingFetcher(fetcher: fetcher, storer: cache)
+        )
+    }
+
+    /// Resolve through `fetcher` and persist each fetched block after CID verification.
+    func resolve(
+        paths: ArrayTrie<ResolutionStrategy>,
+        fetcher: any Fetcher,
+        cache: any Storer
+    ) async throws -> Self {
+        try await resolve(
+            paths: paths,
+            fetcher: CachingFetcher(fetcher: fetcher, storer: cache)
+        )
+    }
+
+    /// Resolve recursively and persist each fetched block after CID verification.
+    func resolveRecursive(fetcher: any Fetcher, cache: any Storer) async throws -> Self {
+        try await resolveRecursive(
+            fetcher: CachingFetcher(fetcher: fetcher, storer: cache)
+        )
+    }
+
+    /// Resolve this Header and persist its fetched block after CID verification.
+    func resolve(fetcher: any Fetcher, cache: any Storer) async throws -> Self {
+        try await resolve(
+            fetcher: CachingFetcher(fetcher: fetcher, storer: cache)
+        )
+    }
+
     // MARK: - Batched resolution over a ContentSource
 
     /// Resolve against a batched ``ContentSource``. The source is wrapped in a
@@ -74,5 +112,28 @@ public extension Header {
 
     func resolve(source: any ContentSource) async throws -> Self {
         try await resolve(fetcher: CoalescingFetcher(source))
+    }
+
+    /// Resolve through a batched source and cache verified fetched blocks.
+    func resolve(
+        paths: ArrayTrie<ResolutionStrategy>,
+        source: any ContentSource,
+        cache: any Storer
+    ) async throws -> Self {
+        try await resolve(
+            paths: paths,
+            fetcher: CoalescingFetcher(source),
+            cache: cache
+        )
+    }
+
+    /// Resolve recursively through a batched source and cache verified fetched blocks.
+    func resolveRecursive(source: any ContentSource, cache: any Storer) async throws -> Self {
+        try await resolveRecursive(fetcher: CoalescingFetcher(source), cache: cache)
+    }
+
+    /// Resolve this Header through a batched source and cache its verified block.
+    func resolve(source: any ContentSource, cache: any Storer) async throws -> Self {
+        try await resolve(fetcher: CoalescingFetcher(source), cache: cache)
     }
 }

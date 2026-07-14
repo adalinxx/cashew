@@ -158,17 +158,7 @@ public extension Header {
     }
 
     func verifyData(_ data: Data, matches rawCID: String) throws {
-        let expectedCID = try CID(rawCID)
-        guard let hashAlgorithm = expectedCID.multihash.algorithm else {
-            throw DataErrors.cidCreationFailed
-        }
-        let actualMultihash = try Multihash(raw: data, hashedWith: hashAlgorithm)
-        let actualCID = try CID(
-            version: expectedCID.version,
-            codec: expectedCID.codec,
-            multihash: actualMultihash
-        )
-        guard actualCID == expectedCID else { throw DataErrors.cidMismatch }
+        try verifyContentAddress(data, matches: rawCID)
     }
 
     func reEncryptIfNeeded(node: NodeType, keyProvider: KeyProvider?) throws -> Self {
@@ -198,4 +188,18 @@ public extension Header {
         }
         return try EncryptionHelper.decrypt(data: data, key: key)
     }
+}
+
+func verifyContentAddress(_ data: Data, matches rawCID: String) throws {
+    let expectedCID = try CID(rawCID)
+    guard let hashAlgorithm = expectedCID.multihash.algorithm else {
+        throw DataErrors.cidCreationFailed
+    }
+    let actualMultihash = try Multihash(raw: data, hashedWith: hashAlgorithm)
+    let actualCID = try CID(
+        version: expectedCID.version,
+        codec: expectedCID.codec,
+        multihash: actualMultihash
+    )
+    guard actualCID == expectedCID else { throw DataErrors.cidMismatch }
 }

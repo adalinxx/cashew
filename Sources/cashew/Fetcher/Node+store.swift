@@ -2,6 +2,21 @@ import ArrayTrie
 import Foundation
 
 extension Node {
+    func materializedChildren() -> [any Header] {
+        var headers: [any Header] = []
+        for property in properties().sorted() {
+            if let header = get(property: property) {
+                headers.append(header)
+            }
+        }
+
+        if let radixNode = self as? any RadixNode,
+           let header = radixNode.value as? any Header {
+            headers.append(header)
+        }
+        return headers
+    }
+
     func collectVolumeEntries(
         into entries: inout [String: Data],
         visited: inout Set<String>,

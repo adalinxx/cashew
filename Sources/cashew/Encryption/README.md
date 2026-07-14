@@ -75,10 +75,10 @@ encHeader.encryptionInfo?.iv       // base64(random nonce)
 
 ### Storing and Resolving Encrypted Data
 
-The volume store and fetcher must be able to look up keys by their hash. Implement `KeyProvider` on the `VolumeStorer`, or `KeyProvidingFetcher` for reads:
+Sparse and Volume stores must be able to look up keys by their hash when serializing encrypted materialized nodes. Implement `KeyProvider` on the `Storer` or `VolumeStorer`, or `KeyProvidingFetcher` for reads:
 
 ```swift
-class MyStoreFetcher: VolumeStorer, Fetcher, KeyProvider {
+class MyStoreFetcher: Storer, VolumeStorer, Fetcher, KeyProvider {
     private var storage: [String: Data] = [:]
     private var keys: [String: SymmetricKey] = [:]
 
@@ -89,6 +89,9 @@ class MyStoreFetcher: VolumeStorer, Fetcher, KeyProvider {
     }
 
     func key(for keyHash: String) -> SymmetricKey? { keys[keyHash] }
+    func store(entries: [String: Data]) async {
+        storage.merge(entries) { _, new in new }
+    }
     func store(volume: SerializedVolume) async {
         storage.merge(volume.entries) { _, new in new }
     }
@@ -387,13 +390,14 @@ For resolve operations, the fetcher must also provide keys:
 public protocol KeyProvidingFetcher: Fetcher, KeyProvider {}
 ```
 
-A single type can conform to both `VolumeStorer` and `KeyProvidingFetcher` to handle the full lifecycle.
+A single type can conform to `Storer`, `VolumeStorer`, and `KeyProvidingFetcher` to handle sparse writes, complete boundaries, and reads.
 
 ### When Keys Are Needed
 
 | Operation | Requires KeyProvider? | Which protocol? |
 |-----------|----------------------|-----------------|
 | `encrypt(encryption:)` | No — keys are in the strategy | N/A |
+| `Header.store(paths:storer:)` | Yes, if a selected Header is encrypted | `storer as? KeyProvider` |
 | `Volume.store(storer:)` | Yes, if the Volume is encrypted | `storer as? KeyProvider` |
 | `resolve(fetcher:)` | Yes, if header is encrypted | `fetcher as? KeyProvider` |
 | `transform(transforms:keyProvider:)` | Yes, to preserve encryption | `KeyProvider` parameter |

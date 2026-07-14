@@ -2,9 +2,12 @@ import cashew
 import ArrayTrie
 import Foundation
 
-// A simple in-memory store that implements both VolumeStorer and Fetcher.
-final class MemoryStore: VolumeStorer, Fetcher, @unchecked Sendable {
+// A simple in-memory store for sparse blocks, complete Volumes, and reads.
+final class MemoryStore: Storer, VolumeStorer, Fetcher, @unchecked Sendable {
     private var storage: [String: Data] = [:]
+    func store(entries: [String: Data]) async {
+        storage.merge(entries) { _, new in new }
+    }
     func store(volume: SerializedVolume) async {
         storage.merge(volume.entries) { _, new in new }
     }

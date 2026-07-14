@@ -3,7 +3,19 @@
 Cashew treats each `Volume` as an independent availability boundary. The typed,
 content-addressed DAG remains the sole source of relationships between Volumes.
 
-## Storage contract
+## Sparse DAG contract
+
+- `Header.store(paths:storer:)` uses `ResolutionStrategy`, so targeted, recursive,
+  list, and range plans select exactly the blocks the equivalent resolve would fetch.
+- Sparse storage permits unresolved references outside the selected paths.
+- A selected unresolved Header or CID mismatch fails before `Storer` receives the batch.
+- `resolve(..., cache:)` is an explicit read-through operation. Fetched bytes are
+  verified against their CID before they are written to the sparse `Storer`.
+- Read-through cache writes are incremental and are not rolled back if a later
+  fetch in the same resolution fails.
+- Sparse writes make no completeness or retention claim.
+
+## Volume storage contract
 
 - Cashew fully serializes the selected Volume before calling `VolumeStorer`.
 - Complete-boundary buffering uses temporary memory proportional to that boundary's
@@ -32,6 +44,9 @@ Cashew does not infer retention, workflow completeness, peer selection, validity
 or canonicity. Applications choose storage and retention plans explicitly.
 
 ## Correctness evidence
+
+`SparseStorageTests` covers path equivalence, unresolved off-path blocks,
+fail-before-emission, encryption, verified caching, and dual Storer conformance.
 
 `StoragePlanTests` covers boundary completeness, root-only and targeted storage,
 recursive selection, traversal through ordinary Headers, unresolved children,
