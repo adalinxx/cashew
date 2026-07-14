@@ -140,6 +140,21 @@ final class StoragePlanTests: XCTestCase {
         func set(properties: [PathSegment: any Header]) -> Self { self }
     }
 
+    private struct MissingOffPathChildNode: Node {
+        let selected: VolumeImpl<Leaf>
+
+        func get(property: PathSegment) -> (any Header)? {
+            property == "selected" ? selected : nil
+        }
+
+        func properties() -> Set<PathSegment> { ["missing", "selected"] }
+
+        func set(properties: [PathSegment: any Header]) -> Self {
+            guard let selected = properties["selected"] as? VolumeImpl<Leaf> else { return self }
+            return Self(selected: selected)
+        }
+    }
+
     private enum EncodingFailure: Error {
         case injected
     }
@@ -196,6 +211,25 @@ final class StoragePlanTests: XCTestCase {
 
         func store(rawCid: String, data: Data) throws {
             entries[rawCid] = data
+        }
+    }
+
+    private final class RecordingFetcher: Fetcher, @unchecked Sendable {
+        private let backing: RecordingStorer
+        private let lock = NSLock()
+        private var fetchedCIDs = Set<String>()
+
+        init(backing: RecordingStorer) {
+            self.backing = backing
+        }
+
+        func fetch(rawCid: String) async throws -> Data {
+            lock.withLock { _ = fetchedCIDs.insert(rawCid) }
+            return try await backing.fetch(rawCid: rawCid)
+        }
+
+        var fetched: Set<String> {
+            lock.withLock { fetchedCIDs }
         }
     }
 
@@ -295,6 +329,22 @@ final class StoragePlanTests: XCTestCase {
         XCTAssertEqual(storer.roots, [outer.rawCID])
     }
 
+    func testRecursiveFailureKeepsEveryCompletedAncestor() async throws {
+        let grandchild = try VolumeImpl(node: Leaf(value: "grandchild"))
+        let child = try VolumeImpl(node: BranchNode(grandchild: grandchild))
+        let sibling = try VolumeImpl(node: Leaf(value: "sibling"))
+        let outer = try VolumeImpl(node: TreeNode(child: child, sibling: sibling))
+        let storer = RecordingStorer()
+        storer.failOnRoot = grandchild.rawCID
+
+        await XCTAssertThrowsErrorAsync(
+            try await outer.storeRecursively(storer: storer)
+        ) { error in
+            XCTAssertEqual(error as? InjectedFailure, .store(grandchild.rawCID))
+        }
+        XCTAssertEqual(storer.roots, [outer.rawCID, child.rawCID])
+    }
+
     func testSharedVolumesAreEmittedOnceWithoutDroppingDistinctTargetedPaths() async throws {
         let first = try VolumeImpl(node: Leaf(value: "first"))
         let second = try VolumeImpl(node: Leaf(value: "second"))
@@ -373,6 +423,19 @@ final class StoragePlanTests: XCTestCase {
         XCTAssertTrue(failingStore.roots.isEmpty)
     }
 
+    func testTargetedStoreRequiresOffPathStructuralConsistency() async throws {
+        let selected = try VolumeImpl(node: Leaf(value: "selected"))
+        let outer = try VolumeImpl(node: MissingOffPathChildNode(selected: selected))
+        let storer = RecordingStorer()
+
+        await XCTAssertThrowsErrorAsync(
+            try await outer.store(paths: [["selected"]: .targeted], storer: storer)
+        ) { error in
+            XCTAssertEqual(error as? DataErrors, .missingDeclaredChild("missing"))
+        }
+        XCTAssertTrue(storer.roots.isEmpty)
+    }
+
     func testEncryptedVolumeUsesStorerKeyProvider() async throws {
         let key = SymmetricKey(size: .bits256)
         let volume = try VolumeImpl<Leaf>(node: Leaf(value: "encrypted"), key: key)
@@ -413,6 +476,31 @@ final class StoragePlanTests: XCTestCase {
         await XCTAssertThrowsErrorAsync(
             try await unresolved.resolve(paths: [["bob"]: .targeted], fetcher: storer)
         )
+    }
+
+    func testStorageAndResolutionSelectTheSameRadixVolumes() async throws {
+        typealias Dictionary = VolumeMerkleDictionaryImpl<VolumeImpl<Leaf>>
+        let dictionary = try Dictionary()
+            .inserting(key: "alice", value: try VolumeImpl(node: Leaf(value: "one")))
+            .inserting(key: "alicia", value: try VolumeImpl(node: Leaf(value: "two")))
+            .inserting(key: "bob", value: try VolumeImpl(node: Leaf(value: "three")))
+        let outer = try VolumeImpl(node: dictionary)
+        let backing = RecordingStorer()
+        try await outer.storeRecursively(storer: backing)
+
+        for key in ["alice", "alicia", "bob", "carol"] {
+            let stored = RecordingStorer()
+            try await outer.store(paths: [[key]: .targeted], storer: stored)
+
+            let fetcher = RecordingFetcher(backing: backing)
+            let unresolved = VolumeImpl<Dictionary>(rawCID: outer.rawCID)
+            _ = try await unresolved.resolve(
+                paths: [[key]: .targeted],
+                fetcher: fetcher
+            )
+
+            XCTAssertEqual(Set(stored.roots), fetcher.fetched, "path: \(key)")
+        }
     }
 
     func testTargetedRadixValueVolumeUsesTheSameLogicalKeyAsResolve() async throws {

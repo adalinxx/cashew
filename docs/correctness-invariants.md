@@ -9,7 +9,9 @@ failures emit nothing for that boundary.
 ## CASHEW-VOLUME-002 — declared structure is consistent
 
 Every property returned by `Node.properties()` must return a Header from
-`get(property:)`. Otherwise storage fails with `DataErrors.missingDeclaredChild`.
+`get(property:)`. This applies to every declared edge of a selected boundary,
+including off-path siblings, because the boundary itself is always emitted whole.
+Otherwise storage fails with `DataErrors.missingDeclaredChild`.
 
 ## CASHEW-VOLUME-003 — Volume relationships stay in content
 
@@ -19,7 +21,8 @@ node. Storage does not duplicate parent/child relationships as metadata.
 ## CASHEW-VOLUME-004 — Volumes are independent
 
 Nested Volume bytes are never members of the parent payload. The parent is stored
-before a selected child, and a child failure does not undo the parent.
+before a selected child, and a child failure does not undo the parent. Multi-Volume
+storage is non-transactional and must be safely re-drivable after partial success.
 
 ## CASHEW-VOLUME-005 — plans control traversal
 

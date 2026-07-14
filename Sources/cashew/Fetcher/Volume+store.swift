@@ -62,6 +62,7 @@ public extension Volume {
     }
 
     /// Store this Volume and every materialized nested Volume independently.
+    /// Completed boundaries are not rolled back if a later boundary fails.
     func storeRecursively(storer: any VolumeStorer) async throws {
         let session = volumeStorageSession(storer)
         let node = try await storeCurrentVolume(storer: session)

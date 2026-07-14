@@ -19,7 +19,9 @@ public struct SerializedVolume: Sendable {
 /// Persists complete Volume boundaries emitted by Cashew's storage planner.
 ///
 /// Cashew calls this once per selected Volume, after the full boundary has been
-/// serialized. A conformer never has to track enter/exit/abort state.
+/// serialized. Multi-Volume plans are not transactional: completed boundaries
+/// remain stored if a later boundary fails. Conformers must therefore make an
+/// identical repeated store idempotent so callers can safely retry the plan.
 public protocol VolumeStorer: Sendable {
     func store(volume: SerializedVolume) async throws
 }

@@ -12,12 +12,11 @@ public extension RadixNode {
             return
         }
 
-        if let traversalPaths = paths.traverse(path: prefix) {
-            for char in children.keys.sorted() {
-                guard let childPaths = traversalPaths.traverseChild(char),
-                      let child = children[char] else { continue }
-                try await child.storeSelectedVolumes(paths: childPaths, storer: storer)
-            }
+        guard let traversalPaths = paths.traverse(path: prefix) else { return }
+        for char in children.keys.sorted() {
+            guard let childPaths = traversalPaths.traverseChild(char),
+                  let child = children[char] else { continue }
+            try await child.storeSelectedVolumes(paths: childPaths, storer: storer)
         }
 
         if let value,
