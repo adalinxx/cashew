@@ -27,6 +27,13 @@ extension Header {
             data = nodeData
         }
 
+        return data
+    }
+
+    func verifiedSerializedDataForStorage(keyProvider: (any KeyProvider)?) throws -> Data {
+        let data = try serializedDataForStorage(keyProvider: keyProvider)
+        // Complete-Volume emission is fail-closed; legacy Storer keeps its
+        // established block-at-a-time write semantics.
         try verifyData(data, matches: rawCID)
         return data
     }
@@ -39,7 +46,7 @@ extension Header {
         guard !(self is any Volume) else { return }
         guard visited.insert(rawCID).inserted else { return }
         guard let node else { throw DataErrors.nodeNotAvailable }
-        entries[rawCID] = try serializedDataForStorage(keyProvider: keyProvider)
+        entries[rawCID] = try verifiedSerializedDataForStorage(keyProvider: keyProvider)
         try node.collectVolumeEntries(
             into: &entries,
             visited: &visited,

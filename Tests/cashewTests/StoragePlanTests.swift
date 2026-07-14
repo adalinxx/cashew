@@ -214,6 +214,43 @@ final class StoragePlanTests: XCTestCase {
         }
     }
 
+    private actor BlockingFailingStorer: VolumeStorer {
+        private var calls = 0
+        private var started = false
+        private var startedWaiters: [CheckedContinuation<Void, Never>] = []
+        private var release: CheckedContinuation<Void, Never>?
+
+        func store(volume: SerializedVolume) async throws {
+            calls += 1
+            guard calls == 1 else { return }
+
+            started = true
+            startedWaiters.forEach { $0.resume() }
+            startedWaiters.removeAll()
+            await withCheckedContinuation { release = $0 }
+            throw InjectedFailure.store(volume.root)
+        }
+
+        func waitUntilStarted() async {
+            if started { return }
+            await withCheckedContinuation { startedWaiters.append($0) }
+        }
+
+        func releaseFirstStore() {
+            release?.resume()
+            release = nil
+        }
+
+        func callCount() -> Int { calls }
+    }
+
+    private actor CompletionFlag {
+        private var completed = false
+
+        func markCompleted() { completed = true }
+        func isCompleted() -> Bool { completed }
+    }
+
     private final class RecordingFetcher: Fetcher, @unchecked Sendable {
         private let backing: RecordingStorer
         private let lock = NSLock()
@@ -393,6 +430,55 @@ final class StoragePlanTests: XCTestCase {
             XCTAssertEqual(error as? DataErrors, .cidMismatch)
         }
         XCTAssertTrue(childStore.roots.isEmpty)
+    }
+
+    func testLegacyStorerKeepsExistingCIDValidationSemantics() throws {
+        let expected = try HeaderImpl(node: Leaf(value: "expected"))
+        let mismatched = HeaderImpl<Leaf>(
+            rawCID: expected.rawCID,
+            node: Leaf(value: "different"),
+            encryptionInfo: nil
+        )
+        let storer = LegacyStorer()
+
+        try mismatched.storeRecursively(storer: storer)
+
+        XCTAssertEqual(storer.entries[expected.rawCID], mismatched.node?.toData())
+    }
+
+    func testConcurrentDuplicateStoreAwaitsFailureAndRemainsRetryable() async throws {
+        let root = "shared-root"
+        let volume = SerializedVolume(root: root, entries: [:])
+        let backing = BlockingFailingStorer()
+        let session = VolumeStorageSession(storer: backing)
+        let secondCompletion = CompletionFlag()
+
+        let first = Task {
+            try await session.store(volume: volume)
+        }
+        await backing.waitUntilStarted()
+
+        let second = Task {
+            do {
+                try await session.store(volume: volume)
+                await secondCompletion.markCompleted()
+            } catch {
+                await secondCompletion.markCompleted()
+                throw error
+            }
+        }
+
+        try await Task.sleep(for: .milliseconds(50))
+        let completedBeforePersistence = await secondCompletion.isCompleted()
+        XCTAssertFalse(completedBeforePersistence)
+
+        await backing.releaseFirstStore()
+        await XCTAssertThrowsErrorAsync(try await first.value)
+        await XCTAssertThrowsErrorAsync(try await second.value)
+
+        try await session.store(volume: volume)
+        let callCount = await backing.callCount()
+        XCTAssertEqual(callCount, 2)
     }
 
     func testLegacyStorerSkipsUnresolvedVolumesConsistently() throws {

@@ -3,25 +3,18 @@ import ArrayTrie
 extension Volume {
     func storeCurrentVolume(storer: VolumeStorageSession) async throws -> NodeType {
         guard let node else { throw DataErrors.nodeNotAvailable }
-        guard await storer.claim(root: rawCID) else { return node }
+        if try await storer.waitForStored(root: rawCID) { return node }
 
-        do {
-            var entries = [rawCID: try serializedDataForStorage(keyProvider: storer)]
-            var visited = Set([rawCID])
-            try node.collectVolumeEntries(
-                into: &entries,
-                visited: &visited,
-                keyProvider: storer
-            )
+        var entries = [rawCID: try verifiedSerializedDataForStorage(keyProvider: storer)]
+        var visited = Set([rawCID])
+        try node.collectVolumeEntries(
+            into: &entries,
+            visited: &visited,
+            keyProvider: storer
+        )
 
-            try await storer.storeClaimed(
-                volume: SerializedVolume(root: rawCID, entries: entries)
-            )
-            return node
-        } catch {
-            await storer.cancel(root: rawCID)
-            throw error
-        }
+        try await storer.store(volume: SerializedVolume(root: rawCID, entries: entries))
+        return node
     }
 }
 

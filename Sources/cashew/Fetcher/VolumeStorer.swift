@@ -27,36 +27,57 @@ public protocol VolumeStorer: Sendable {
 }
 
 actor VolumeStorageSession: VolumeStorer, KeyProvider {
+    private enum StoreState {
+        case inFlight(Task<Void, any Error>)
+        case stored
+    }
+
     nonisolated private let storer: any VolumeStorer
-    private var storedRoots = Set<String>()
+    private var stores = [String: StoreState]()
     private var recursivelyExpandedRoots = Set<String>()
 
     init(storer: any VolumeStorer) {
         self.storer = storer
     }
 
-    func claim(root: String) -> Bool {
-        storedRoots.insert(root).inserted
-    }
-
-    func cancel(root: String) {
-        storedRoots.remove(root)
-    }
-
-    func storeClaimed(volume: SerializedVolume) async throws {
-        try await storer.store(volume: volume)
-    }
-
     func claimRecursiveExpansion(root: String) -> Bool {
         recursivelyExpandedRoots.insert(root).inserted
     }
 
+    func waitForStored(root: String) async throws -> Bool {
+        switch stores[root] {
+        case .stored:
+            return true
+        case .inFlight(let task):
+            try await task.value
+            return true
+        case nil:
+            return false
+        }
+    }
+
     func store(volume: SerializedVolume) async throws {
-        guard storedRoots.insert(volume.root).inserted else { return }
-        do {
+        switch stores[volume.root] {
+        case .stored:
+            return
+        case .inFlight(let task):
+            try await task.value
+            return
+        case nil:
+            break
+        }
+
+        let storer = self.storer
+        let task = Task {
             try await storer.store(volume: volume)
+        }
+        stores[volume.root] = .inFlight(task)
+
+        do {
+            try await task.value
+            stores[volume.root] = .stored
         } catch {
-            storedRoots.remove(volume.root)
+            stores[volume.root] = nil
             throw error
         }
     }
