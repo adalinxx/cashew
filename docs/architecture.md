@@ -41,8 +41,8 @@ Sources/cashew/
 ├── Resolver/              lazy resolution: ResolutionStrategy, *+resolve.swift
 ├── Transform/             batch mutation: Transform, *+transform.swift
 ├── Proofs/                SparseMerkleProof, *+proofs.swift
-├── Fetcher/               persistence boundary: Fetcher, Storer, KeyProvider,
-│                          VolumeAware* , *+store.swift
+├── Fetcher/               persistence boundary: Fetcher, Storer, VolumeStorer,
+│                          StorageStrategy, *+store.swift
 ├── Diff/                  CashewDiff, *+diff.swift
 ├── Query/                 CashewParser, Expression, Plan, Executor, Queryable
 ├── Encryption/            EncryptionStrategy, *+encrypt.swift
