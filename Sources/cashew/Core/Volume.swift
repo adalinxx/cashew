@@ -15,8 +15,7 @@ import Crypto
 /// while the nested Volume's bytes remain independently available, retainable, and
 /// evictable. Storing an outer Volume does not store a separate relationship to the
 /// nested Volume; that relationship remains encoded in the content-addressed node.
-/// Volumes are persisted through ``VolumeStorer``. Legacy ``Storer`` traversal
-/// stops at Volume boundaries.
+/// Volumes are persisted through ``VolumeStorer``.
 ///
 /// ```swift
 /// typealias UserVolume = VolumeImpl<MerkleDictionaryImpl<String>>

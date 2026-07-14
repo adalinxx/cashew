@@ -206,14 +206,6 @@ final class StoragePlanTests: XCTestCase {
         }
     }
 
-    private final class LegacyStorer: Storer {
-        private(set) var entries: [String: Data] = [:]
-
-        func store(rawCid: String, data: Data) throws {
-            entries[rawCid] = data
-        }
-    }
-
     private actor BlockingFailingStorer: VolumeStorer {
         private var calls = 0
         private var started = false
@@ -432,20 +424,6 @@ final class StoragePlanTests: XCTestCase {
         XCTAssertTrue(childStore.roots.isEmpty)
     }
 
-    func testLegacyStorerKeepsExistingCIDValidationSemantics() throws {
-        let expected = try HeaderImpl(node: Leaf(value: "expected"))
-        let mismatched = HeaderImpl<Leaf>(
-            rawCID: expected.rawCID,
-            node: Leaf(value: "different"),
-            encryptionInfo: nil
-        )
-        let storer = LegacyStorer()
-
-        try mismatched.storeRecursively(storer: storer)
-
-        XCTAssertEqual(storer.entries[expected.rawCID], mismatched.node?.toData())
-    }
-
     func testConcurrentDuplicateStoreAwaitsFailureAndRemainsRetryable() async throws {
         let root = "shared-root"
         let volume = SerializedVolume(root: root, entries: [:])
@@ -479,43 +457,6 @@ final class StoragePlanTests: XCTestCase {
         try await session.store(volume: volume)
         let callCount = await backing.callCount()
         XCTAssertEqual(callCount, 2)
-    }
-
-    func testLegacyStorerRejectsTypeErasedVolumes() throws {
-        let resolved = try VolumeImpl(node: Leaf(value: "remote"))
-        let unresolved = VolumeImpl<Leaf>(rawCID: resolved.rawCID)
-        let erased: any Header = unresolved
-        let storer = LegacyStorer()
-
-        XCTAssertThrowsError(try erased.storeRecursively(storer: storer)) { error in
-            XCTAssertEqual(error as? DataErrors, .volumeRequiresVolumeStorer)
-        }
-
-        XCTAssertTrue(storer.entries.isEmpty)
-    }
-
-    func testLegacyStorerStopsAtNestedVolumeBoundary() throws {
-        let nested = try VolumeImpl(node: Leaf(value: "nested"))
-        let root = try HeaderImpl(node: VolumeChildNode(child: nested))
-        let storer = LegacyStorer()
-
-        try root.storeRecursively(storer: storer)
-
-        XCTAssertNotNil(storer.entries[root.rawCID])
-        XCTAssertNil(storer.entries[nested.rawCID])
-    }
-
-    func testLegacyStorerStopsAtVolumeValuedRadixBoundary() throws {
-        let nested = try VolumeImpl(node: Leaf(value: "nested"))
-        let dictionary = try MerkleDictionaryImpl<VolumeImpl<Leaf>>()
-            .inserting(key: "nested", value: nested)
-        let root = try HeaderImpl(node: dictionary)
-        let storer = LegacyStorer()
-
-        try root.storeRecursively(storer: storer)
-
-        XCTAssertNotNil(storer.entries[root.rawCID])
-        XCTAssertNil(storer.entries[nested.rawCID])
     }
 
     func testIncompleteBoundaryIsNeverEmitted() async throws {

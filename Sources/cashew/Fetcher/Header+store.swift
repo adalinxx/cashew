@@ -4,13 +4,6 @@ import Crypto
 
 extension Header {
     /// Serialize this materialized Header exactly as its CID was computed.
-    ///
-    /// Both ordinary Header storage and Volume-root storage use this helper so
-    /// plaintext/encrypted paths cannot drift apart.
-    func serializedDataForStorage(storer: Storer) throws -> Data {
-        try serializedDataForStorage(keyProvider: storer as? any KeyProvider)
-    }
-
     func serializedDataForStorage(keyProvider: (any KeyProvider)?) throws -> Data {
         guard let node else { throw DataErrors.nodeNotAvailable }
 
@@ -32,8 +25,6 @@ extension Header {
 
     func verifiedSerializedDataForStorage(keyProvider: (any KeyProvider)?) throws -> Data {
         let data = try serializedDataForStorage(keyProvider: keyProvider)
-        // Complete-Volume emission is fail-closed; legacy Storer keeps its
-        // established block-at-a-time write semantics.
         try verifyData(data, matches: rawCID)
         return data
     }
@@ -79,17 +70,5 @@ extension Header {
 
         guard let node else { throw DataErrors.nodeNotAvailable }
         try await node.storeVolumesRecursively(storer: storer)
-    }
-}
-
-public extension Header {
-    /// Stores an ordinary Header graph, stopping before each Volume boundary.
-    func storeRecursively(storer: Storer) throws {
-        guard !(self is any Volume) else { throw DataErrors.volumeRequiresVolumeStorer }
-        guard let node else { return }
-        if storer.contains(rawCid: rawCID) { return }
-
-        try storer.store(rawCid: rawCID, data: try serializedDataForStorage(storer: storer))
-        try node.storeRecursively(storer: storer)
     }
 }

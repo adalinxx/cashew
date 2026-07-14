@@ -1,8 +1,6 @@
 /// Errors from data serialization, CID computation, encryption, and structural storage traversal.
 public enum DataErrors: Error, Equatable {
     case nodeNotAvailable
-    /// Volume persistence requires the complete-boundary `VolumeStorer` API.
-    case volumeRequiresVolumeStorer
     /// `Node.properties()` declared a child that `get(property:)` did not return.
     /// A selected boundary must be structurally complete even when the missing
     /// child is not on a targeted path.

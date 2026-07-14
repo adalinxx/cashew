@@ -33,11 +33,11 @@ var dict = MerkleDictionaryImpl<String>()
 dict = try dict.inserting(key: "alice", value: "engineer")
 dict = try dict.inserting(key: "bob", value: "designer")
 
-let header = try HeaderImpl(node: dict)
-print(header.rawCID) // "baguqeera..." — unique fingerprint of this exact data
+let volume = try VolumeImpl(node: dict)
+print(volume.rawCID) // "baguqeera..." — unique fingerprint of this exact data
 
-// Persist the whole tree to any content-addressable store
-try header.storeRecursively(storer: myStore)
+// Persist one complete storage boundary
+try await volume.store(storer: myStore)
 ```
 
 Every version of the data gets a unique CID. Insert one more key and the CID changes, but the branches you didn't touch keep their CIDs and are shared with the previous version.

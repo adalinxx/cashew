@@ -15,7 +15,7 @@ final class VolumeTestFetcher: Fetcher, TestVolumeStore, @unchecked Sendable {
         return data
     }
 
-    func store(rawCid: String, data: Data) throws {
+    func storeRaw(rawCid: String, data: Data) {
         lock.withLock { storage[rawCid] = data }
     }
 }
@@ -30,7 +30,7 @@ final class PlainTestFetcher: Fetcher, TestVolumeStore, @unchecked Sendable {
         return data
     }
 
-    func store(rawCid: String, data: Data) throws {
+    func storeRaw(rawCid: String, data: Data) {
         lock.withLock { storage[rawCid] = data }
     }
 }

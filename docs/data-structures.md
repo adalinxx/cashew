@@ -2,7 +2,7 @@
 
 This document specifies the data structures cashew provides and the algorithms
 that operate on them. For how the library is assembled, the content-addressing
-model, lazy resolution, Volumes, and the Fetcher/Storer boundary, see
+model, lazy resolution, Volumes, and the persistence boundary, see
 [architecture.md](architecture.md).
 
 Throughout, *protocol* means an abstract type with default behavior in

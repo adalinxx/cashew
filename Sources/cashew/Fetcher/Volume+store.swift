@@ -62,7 +62,4 @@ public extension Volume {
         guard await session.claimRecursiveExpansion(root: rawCID) else { return }
         try await node.storeVolumesRecursively(storer: session)
     }
-
-    @available(*, unavailable, message: "Volumes require the complete-boundary VolumeStorer API")
-    func storeRecursively(storer: Storer) throws { }
 }

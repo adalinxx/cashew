@@ -66,19 +66,4 @@ public extension Node {
             }
         }
     }
-
-    func storeRecursively(storer: Storer) throws {
-        for property in properties().sorted() {
-            guard let header = get(property: property) else { continue }
-            guard !(header is any Volume) else { continue }
-            try header.storeRecursively(storer: storer)
-        }
-
-        if let radixNode = self as? any RadixNode,
-           let value = radixNode.value,
-           let header = value as? any Header,
-           !(header is any Volume) {
-            try header.storeRecursively(storer: storer)
-        }
-    }
 }

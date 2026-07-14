@@ -12,7 +12,7 @@ final class CountingStore: Fetcher, ContentSource, TestVolumeStore, @unchecked S
     private(set) var batchCalls = 0      // ContentSource: one trip per wave/level
     private(set) var totalCidsBatched = 0
 
-    func store(rawCid: String, data: Data) throws {
+    func storeRaw(rawCid: String, data: Data) {
         lock.withLock { storage[rawCid] = data }
     }
 
