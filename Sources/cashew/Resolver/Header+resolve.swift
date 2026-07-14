@@ -62,7 +62,7 @@ public extension Header {
     /// Resolve against a batched ``ContentSource``. The source is wrapped in a
     /// single ``CoalescingFetcher`` for the whole walk, so each concurrent wave
     /// of child fetches collapses into one batched request — no per-node round
-    /// trips, no `enterVolume` bulk-load hack, and no Header-vs-Volume divergence
+    /// trips, with no Header-vs-Volume divergence
     /// (the recursive walk threads the one coalescer through every level).
     func resolve(paths: ArrayTrie<ResolutionStrategy>, source: any ContentSource) async throws -> Self {
         try await resolve(paths: paths, fetcher: CoalescingFetcher(source))

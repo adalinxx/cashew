@@ -1,5 +1,8 @@
 # Redesign series dependency
 
-VolumeBroker is the first consumer of this new lifecycle. Its companion PR implements `abortVolume`, rejects incomplete scopes, and atomically persists only complete validated Volumes.
+VolumeBroker is the first `VolumeStorer` consumer. Its companion PR accepts each
+complete `SerializedVolume` directly and persists Volume roots independently.
 
-This cashew change is source-breaking for `VolumeAwareStorer` conformers by design: silent default lifecycle behavior cannot enforce the complete-Volume invariant. The coordinated consumer branch and full-stack node branch provide migration and integration coverage.
+This change is source-breaking for former lifecycle-based storage adapters. They
+now implement one async `store(volume:)` method and no longer maintain traversal
+scope, pending-buffer, flush, or abort state.

@@ -1,3 +1,4 @@
+import ArrayTrie
 import Foundation
 import Crypto
 
@@ -7,10 +8,14 @@ extension Header {
     /// Both ordinary Header storage and Volume-root storage use this helper so
     /// plaintext/encrypted paths cannot drift apart.
     func serializedDataForStorage(storer: Storer) throws -> Data {
+        try serializedDataForStorage(keyProvider: storer as? any KeyProvider)
+    }
+
+    func serializedDataForStorage(keyProvider: (any KeyProvider)?) throws -> Data {
         guard let node else { throw DataErrors.nodeNotAvailable }
 
         if let info = encryptionInfo {
-            guard let keyProvider = storer as? KeyProvider else { throw DataErrors.keyNotFound }
+            guard let keyProvider else { throw DataErrors.keyNotFound }
             guard let key = keyProvider.key(for: info.keyHash) else { throw DataErrors.keyNotFound }
             guard let ivData = info.ivData else { throw DataErrors.invalidIV }
             let nonce = try AES.GCM.Nonce(data: ivData)
@@ -22,15 +27,47 @@ extension Header {
         return nodeData
     }
 
-    /// Store one ordinary Header and every ordinary descendant inside the
-    /// currently active Volume boundary, stopping at nested Volume boundaries.
-    ///
-    /// The returned materialized nested Volumes are stored independently only after
-    /// the current boundary has successfully exited.
-    func storeWithinCurrentVolume(storer: VolumeAwareStorer) throws -> [any Header] {
+    func collectVolumeEntries(
+        into entries: inout [String: Data],
+        visited: inout Set<String>,
+        keyProvider: (any KeyProvider)?
+    ) throws {
+        guard !(self is any Volume) else { return }
+        guard visited.insert(rawCID).inserted else { return }
         guard let node else { throw DataErrors.nodeNotAvailable }
-        try storer.store(rawCid: rawCID, data: try serializedDataForStorage(storer: storer))
-        return try node.storeWithinCurrentVolume(storer: storer)
+        entries[rawCID] = try serializedDataForStorage(keyProvider: keyProvider)
+        try node.collectVolumeEntries(
+            into: &entries,
+            visited: &visited,
+            keyProvider: keyProvider
+        )
+    }
+
+    func storeSelectedVolumes(
+        paths: ArrayTrie<StorageStrategy>,
+        storer: any VolumeStorer
+    ) async throws {
+        if let volume = self as? any Volume {
+            try await volume.store(paths: paths, storer: storer)
+            return
+        }
+
+        guard let node else { throw DataErrors.nodeNotAvailable }
+        if paths.get([]) == .recursive || paths.get([""]) == .recursive {
+            try await node.storeVolumesRecursively(storer: storer)
+        } else {
+            try await node.storeVolumes(paths: paths, storer: storer)
+        }
+    }
+
+    func storeNestedVolumesRecursively(storer: any VolumeStorer) async throws {
+        if let volume = self as? any Volume {
+            try await volume.storeRecursively(storer: storer)
+            return
+        }
+
+        guard let node else { throw DataErrors.nodeNotAvailable }
+        try await node.storeVolumesRecursively(storer: storer)
     }
 }
 

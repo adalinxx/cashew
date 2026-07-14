@@ -1,55 +1,71 @@
+import ArrayTrie
+import Foundation
+
 extension Node {
-    /// Store every ordinary child inside the currently active Volume and
-    /// return materialized nested Volumes for independent storage after the parent
-    /// boundary has successfully exited.
-    ///
-    /// `properties()` lists same-boundary Headers, Header-valued RadixNode values
-    /// are also same-boundary entries, `Volume` starts a new boundary, and
-    /// `Reference` is not traversed by storage.
-    func storeWithinCurrentVolume(storer: VolumeAwareStorer) throws -> [any Header] {
-        var nestedVolumes: [any Header] = []
-        var materializedNestedRoots = Set<String>()
-
-        func storeHeaderInBoundary(_ header: any Header) throws {
-            if header is any Volume {
-                if header.node != nil,
-                   materializedNestedRoots.insert(header.rawCID).inserted {
-                    nestedVolumes.append(header)
-                }
-            } else {
-                let descendants = try header.storeWithinCurrentVolume(storer: storer)
-                for nested in descendants
-                    where materializedNestedRoots.insert(nested.rawCID).inserted {
-                    nestedVolumes.append(nested)
-                }
-            }
-        }
-
+    func collectVolumeEntries(
+        into entries: inout [String: Data],
+        visited: inout Set<String>,
+        keyProvider: (any KeyProvider)?
+    ) throws {
         for property in properties().sorted() {
             guard let header = get(property: property) else {
                 throw DataErrors.missingDeclaredChild(property)
             }
-            try storeHeaderInBoundary(header)
+            try header.collectVolumeEntries(
+                into: &entries,
+                visited: &visited,
+                keyProvider: keyProvider
+            )
         }
 
-        // RadixNode stores Header values outside properties(); they remain entries
-        // in the current boundary.
         if let radixNode = self as? any RadixNode,
            let value = radixNode.value,
            let header = value as? any Header {
-            try storeHeaderInBoundary(header)
+            try header.collectVolumeEntries(
+                into: &entries,
+                visited: &visited,
+                keyProvider: keyProvider
+            )
+        }
+    }
+
+    func storeVolumesRecursively(storer: any VolumeStorer) async throws {
+        for property in properties().sorted() {
+            guard let header = get(property: property) else {
+                throw DataErrors.missingDeclaredChild(property)
+            }
+            try await header.storeNestedVolumesRecursively(storer: storer)
         }
 
-        return nestedVolumes
+        if let radixNode = self as? any RadixNode,
+           let value = radixNode.value,
+           let header = value as? any Header {
+            try await header.storeNestedVolumesRecursively(storer: storer)
+        }
     }
 }
 
 public extension Node {
+    func storeVolumes(
+        paths: ArrayTrie<StorageStrategy>,
+        storer: any VolumeStorer
+    ) async throws {
+        for property in properties().sorted() {
+            guard let header = get(property: property) else {
+                throw DataErrors.missingDeclaredChild(property)
+            }
+
+            if paths.get([property]) == .recursive {
+                try await header.storeNestedVolumesRecursively(storer: storer)
+            } else if let nextPaths = paths.traverse([property]) {
+                try await header.storeSelectedVolumes(paths: nextPaths, storer: storer)
+            }
+        }
+    }
+
     func storeRecursively(storer: Storer) throws {
-        // Generic best-effort recursion for callers that did not enter through a
-        // Volume root. The strict complete-Volume path uses
-        // `storeWithinCurrentVolume(storer:)` above so it can close the current
-        // boundary before independently storing nested Volumes.
+        // Generic best-effort recursion for block-at-a-time Storer callers.
+        // VolumeStorer uses the complete-boundary planner above.
         var volumeChildren: [any Header] = []
         for property in properties().sorted() {
             guard let header = get(property: property) else { continue }

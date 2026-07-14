@@ -220,15 +220,14 @@ does not change CIDs, and resolution treats it exactly like any other `Header`
 (batching, see §5, handles locality uniformly — there is no Volume-specific
 fetch path). Its behavioral role is on the **storage/retention** side:
 
-- On storage, the recursive walker emits `enterVolume`/`exitVolume` calls to a
-  `VolumeAwareStorer` at each Volume boundary. It completes the current Volume's
-  ordinary bytes before storing any materialized nested Volumes under their own
-  independent scopes (`Sources/cashew/Fetcher/Node+store.swift`,
-  `Sources/cashew/Fetcher/VolumeAwareStorer.swift`). This groups bytes by volume
-  for contiguous storage and per-volume pinning/garbage-collection.
+- On storage, Cashew serializes the complete current boundary and sends one
+  `SerializedVolume` to a `VolumeStorer`. Empty, targeted, and recursive storage
+  plans choose which nested Volume boundaries to cross. The planner uses the same
+  structural and compressed-radix paths as resolution
+  (`Sources/cashew/Fetcher/Volume+store.swift`).
 
 - Relationships between Volume roots remain encoded in the content-addressed
-  nodes. The storage lifecycle does not duplicate them as retention metadata;
+  nodes. Storage does not duplicate them as retention metadata;
   applications that retain several related Volumes pin each root explicitly.
 
 Volumes nest, so a tree can carry boundaries at multiple levels.
@@ -278,6 +277,10 @@ cashew's job is the DAG walk and the integrity checks around these calls:
   `storer.store`, then recurses into the node's children. `contains` lets a
   store short-circuit already-persisted CIDs, so re-storing a structurally-shared
   tree only writes the changed path.
+
+  Complete-Volume storage uses `Volume.store(paths:storer:)` or
+  `Volume.storeRecursively(storer:)`. It builds each `SerializedVolume` in memory
+  before the async sink call, then walks only the selected nested boundaries.
 
 `KeyProvider` (`Sources/cashew/Fetcher/KeyProvider.swift`) maps a key-hash to a
 `SymmetricKey`. A `Fetcher` or `Storer` that also conforms to `KeyProvider`

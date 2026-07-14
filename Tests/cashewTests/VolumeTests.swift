@@ -87,7 +87,7 @@ struct VolumeTests {
         #expect(vol.rawCID == header.rawCID)
     }
 
-    // MARK: - Resolution (a Volume resolves like any Header — no enterVolume hint)
+    // MARK: - Resolution (a Volume resolves like any Header)
 
     @Test("resolve(paths:fetcher:) resolves a targeted path")
     func resolvePathsTargeted() async throws {

@@ -1,9 +1,9 @@
 # Review order
 
-1. `VolumeAwareStorer.swift` lifecycle and membership contract.
-2. `Header+store.swift` ordinary best-effort and content-deduplication behavior.
-3. `Node+store.swift` same-boundary versus nested-Volume traversal.
-4. `Volume+store.swift` root availability, encryption, and abort-on-error behavior.
-5. `VolumeStoreLifecycleTests.swift` adversarial invariant evidence.
-6. `VolumeMerkleDictionaryTests.swift` stack-balanced grouped-store integration fixture.
-7. Companion VolumeBroker PR for the first production consumer.
+1. `StorageStrategy.swift` and `VolumeStorer.swift` public contracts.
+2. `Volume+store.swift` complete-boundary emission and parent-before-child ordering.
+3. `Header+store.swift` serialization and same-boundary collection.
+4. `Node+store.swift` structural plan traversal.
+5. `MerkleDictionary+store.swift` and `RadixNode+store.swift` logical-key traversal.
+6. `StoragePlanTests.swift` adversarial invariant evidence.
+7. Companion VolumeBroker PR for the production adapter.

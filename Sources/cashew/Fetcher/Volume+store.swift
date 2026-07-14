@@ -1,43 +1,68 @@
-import Foundation
+import ArrayTrie
 
 extension Volume {
-    func storeVolumeRecursively(storer: Storer) throws {
-        // Calling storage on a Volume root is a request to publish that complete
-        // availability unit. An unresolved root cannot be published.
+    func storeCurrentVolume(storer: any VolumeStorer) async throws -> NodeType {
         guard let node else { throw DataErrors.nodeNotAvailable }
-        let dataToStore = try serializedDataForStorage(storer: storer)
 
-        if let volumeAware = storer as? VolumeAwareStorer {
-            let nestedVolumes: [any Header]
-            do {
-                // Entry itself is covered by the abort path. A conformer that
-                // allocates its scope before throwing must still be cleaned up.
-                try volumeAware.enterVolume(rootCID: rawCID)
-                try volumeAware.store(rawCid: rawCID, data: dataToStore)
-                nestedVolumes = try node.storeWithinCurrentVolume(storer: volumeAware)
-                try volumeAware.exitVolume(rootCID: rawCID)
-            } catch {
-                // A failed walk must never leave a scope that can later be flushed
-                // as though it were a complete Volume. Preserve the original error.
-                volumeAware.abortVolume(rootCID: rawCID)
-                throw error
-            }
+        let keyProvider = storer as? any KeyProvider
+        var entries = [rawCID: try serializedDataForStorage(keyProvider: keyProvider)]
+        var visited = Set([rawCID])
+        try node.collectVolumeEntries(
+            into: &entries,
+            visited: &visited,
+            keyProvider: keyProvider
+        )
 
-            // A nested Volume is an independent availability unit. The parent has
-            // already completed its ordinary contents; a materialized child is then
-            // stored under its own lifecycle without changing the parent boundary.
-            for nested in nestedVolumes {
-                try nested.storeRecursively(storer: volumeAware)
-            }
-        } else {
-            try storer.store(rawCid: rawCID, data: dataToStore)
-            try node.storeRecursively(storer: storer)
-        }
+        try await storer.store(volume: SerializedVolume(root: rawCID, entries: entries))
+        return node
     }
 }
 
 public extension Volume {
+    /// Store this Volume and only the nested Volumes selected by `paths`.
+    ///
+    /// Paths use the same structural and compressed-radix traversal rules as
+    /// resolution paths. The root Volume is always selected.
+    func store(
+        paths: [[String]: StorageStrategy],
+        storer: any VolumeStorer
+    ) async throws {
+        var pathTrie = ArrayTrie<StorageStrategy>()
+        for (path, strategy) in paths {
+            pathTrie.set(path, value: strategy)
+        }
+        try await store(paths: pathTrie, storer: storer)
+    }
+
+    /// Store this Volume and only the nested Volumes selected by `paths`.
+    func store(
+        paths: ArrayTrie<StorageStrategy>,
+        storer: any VolumeStorer
+    ) async throws {
+        if paths.get([]) == .recursive || paths.get([""]) == .recursive {
+            try await storeRecursively(storer: storer)
+            return
+        }
+
+        let node = try await storeCurrentVolume(storer: storer)
+        try await node.storeVolumes(paths: paths, storer: storer)
+    }
+
+    /// Store only this complete Volume boundary.
+    func store(storer: any VolumeStorer) async throws {
+        _ = try await storeCurrentVolume(storer: storer)
+    }
+
+    /// Store this Volume and every materialized nested Volume independently.
+    func storeRecursively(storer: any VolumeStorer) async throws {
+        let node = try await storeCurrentVolume(storer: storer)
+        try await node.storeVolumesRecursively(storer: storer)
+    }
+
+    /// Legacy block-at-a-time storage for ordinary `Storer` conformers.
     func storeRecursively(storer: Storer) throws {
-        try storeVolumeRecursively(storer: storer)
+        guard let node else { throw DataErrors.nodeNotAvailable }
+        try storer.store(rawCid: rawCID, data: try serializedDataForStorage(storer: storer))
+        try node.storeRecursively(storer: storer)
     }
 }

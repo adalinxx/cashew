@@ -49,7 +49,7 @@ Every version of the data gets a unique CID. Insert one more key and the CID cha
 - **Merkle data structures** — `MerkleDictionary` is the top-level key-value map, dispatching by first character into a compressed radix trie. `MerkleArray` is an append-only ordered collection backed by a dictionary with 256-bit binary keys; `MerkleSet` is a membership-only set. All share the same content-addressing, resolution, transform, and proof machinery.
 - **Transforms** — mutations (`insert` / `update` / `delete`) applied via `transform(transforms:)` or the per-key `inserting`/`mutating`/`deleting` helpers. Each returns a new tree with recomputed CIDs for the changed nodes only.
 - **Proofs** — sparse Merkle proofs materialize the minimal subtree needed to verify that a key exists, doesn't exist, or can be modified, leaving unrelated branches as CID stubs.
-- **Volumes** — a `Volume` is a `Header` subtype marking a boundary in the DAG where the nodes beneath it form a co-located group (an independently fetchable/retainable unit). It is a *boundary marker*: resolution treats a `Volume` exactly like any other `Header` (batching handles locality uniformly), and on **storage** the recursive walker groups each volume's bytes contiguously via a `VolumeAwareStorer`. Use it to define what gets pinned/served/garbage-collected as a unit.
+- **Volumes** — a `Volume` is a `Header` subtype marking an independently fetchable and retainable boundary in the DAG. Cashew emits each selected boundary as one complete `SerializedVolume`; nested Volumes are selected with `StorageStrategy.targeted` or `.recursive` paths that follow the same traversal rules as resolution. Relationships remain encoded only in the content-addressed nodes.
 
 ## Installation
 

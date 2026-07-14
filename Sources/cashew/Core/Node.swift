@@ -33,6 +33,7 @@ public protocol Node: CashewQueryable, Codable, LosslessStringConvertible, Senda
 
     func resolve(paths: ArrayTrie<ResolutionStrategy>, fetcher: Fetcher) async throws -> Self
     func storeRecursively(storer: Storer) throws
+    func storeVolumes(paths: ArrayTrie<StorageStrategy>, storer: any VolumeStorer) async throws
     func transform(transforms: ArrayTrie<Transform>) throws -> Self?
     func transform(transforms: ArrayTrie<Transform>, keyProvider: KeyProvider?) throws -> Self?
     func proof(paths: ArrayTrie<SparseMerkleProof>, fetcher: Fetcher) async throws -> Self

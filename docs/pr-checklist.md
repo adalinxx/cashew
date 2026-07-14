@@ -1,13 +1,12 @@
-# Volume lifecycle review checklist
+# Volume storage review checklist
 
-- [ ] Every `enterVolume` has a successful `exitVolume` or a failure `abortVolume`.
-- [ ] An unresolved Volume root cannot be published.
-- [ ] Every unresolved ordinary child returned by `Node.properties()` fails a Volume-aware traversal.
-- [ ] Unresolved nested Volumes remain independent availability units and do not make the enclosing Volume partial.
-- [ ] Relationships between Volume roots remain encoded in the DAG and are not duplicated as storage metadata.
-- [ ] `contains(rawCid:)` cannot suppress membership recording inside an open Volume scope.
-- [ ] Descendant storage, serialization, encryption, and exit failures abort the enclosing incomplete scope.
-- [ ] `abortVolume(rootCID:)` cleanup is idempotent.
-- [ ] Direct ordinary Header storage retains its existing best-effort and content-deduplication behavior for every Storer.
-- [ ] No application-specific completeness policy enters cashew.
-- [ ] Consumer conformers are migrated explicitly; no silent default lifecycle behavior remains.
+- [ ] Each `VolumeStorer` call receives one complete `SerializedVolume`.
+- [ ] Missing or unresolved same-boundary Headers prevent emission.
+- [ ] Nested Volume bytes are absent from the parent payload.
+- [ ] Relationships between Volumes remain encoded only in the DAG.
+- [ ] Empty, targeted, and recursive plans cross the intended boundaries.
+- [ ] Storage and resolution interpret structural and compressed-radix paths equally.
+- [ ] Unselected unresolved Volumes are allowed; selected unresolved Volumes fail.
+- [ ] A selected child failure leaves the already-stored parent available.
+- [ ] Encrypted entries use `KeyProvider` when the `VolumeStorer` also conforms.
+- [ ] No application-specific retention or completeness policy enters Cashew.
