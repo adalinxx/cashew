@@ -2,7 +2,17 @@
 import Crypto
 import Foundation
 
-class TestStoreFetcher: Storer, Fetcher, @unchecked Sendable {
+protocol TestVolumeStore: Storer, VolumeStorer { }
+
+extension TestVolumeStore {
+    func store(volume: SerializedVolume) async throws {
+        for (rawCID, data) in volume.entries {
+            try store(rawCid: rawCID, data: data)
+        }
+    }
+}
+
+class TestStoreFetcher: TestVolumeStore, Fetcher, @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [String: Data] = [:]
 
@@ -58,7 +68,7 @@ class TestKeyProvidingStoreFetcher: TestStoreFetcher, KeyProvidingFetcher {
     }
 }
 
-class CountingStoreFetcher: Storer, Fetcher, @unchecked Sendable {
+class CountingStoreFetcher: TestVolumeStore, Fetcher, @unchecked Sendable {
     private let lock = NSLock()
     private var storage: [String: Data] = [:]
     private var _fetchCount: Int = 0

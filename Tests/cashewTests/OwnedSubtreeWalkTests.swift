@@ -15,7 +15,7 @@ struct OwnedSubtreeWalkTests {
             dict = try dict.inserting(key: "key-\(i)", value: "value-\(i)")
         }
         let vol = try VolumeImpl(node: dict)
-        try vol.storeRecursively(storer: store)
+        try await vol.storeRecursively(storer: store)
         return try await VolumeImpl<MerkleDictionaryImpl<String>>(rawCID: vol.rawCID)
             .resolveRecursive(fetcher: store)
     }

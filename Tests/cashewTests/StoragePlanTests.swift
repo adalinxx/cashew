@@ -481,14 +481,41 @@ final class StoragePlanTests: XCTestCase {
         XCTAssertEqual(callCount, 2)
     }
 
-    func testLegacyStorerSkipsUnresolvedVolumesConsistently() throws {
+    func testLegacyStorerRejectsTypeErasedVolumes() throws {
         let resolved = try VolumeImpl(node: Leaf(value: "remote"))
         let unresolved = VolumeImpl<Leaf>(rawCID: resolved.rawCID)
+        let erased: any Header = unresolved
         let storer = LegacyStorer()
 
-        try unresolved.storeRecursively(storer: storer)
+        XCTAssertThrowsError(try erased.storeRecursively(storer: storer)) { error in
+            XCTAssertEqual(error as? DataErrors, .volumeRequiresVolumeStorer)
+        }
 
         XCTAssertTrue(storer.entries.isEmpty)
+    }
+
+    func testLegacyStorerStopsAtNestedVolumeBoundary() throws {
+        let nested = try VolumeImpl(node: Leaf(value: "nested"))
+        let root = try HeaderImpl(node: VolumeChildNode(child: nested))
+        let storer = LegacyStorer()
+
+        try root.storeRecursively(storer: storer)
+
+        XCTAssertNotNil(storer.entries[root.rawCID])
+        XCTAssertNil(storer.entries[nested.rawCID])
+    }
+
+    func testLegacyStorerStopsAtVolumeValuedRadixBoundary() throws {
+        let nested = try VolumeImpl(node: Leaf(value: "nested"))
+        let dictionary = try MerkleDictionaryImpl<VolumeImpl<Leaf>>()
+            .inserting(key: "nested", value: nested)
+        let root = try HeaderImpl(node: dictionary)
+        let storer = LegacyStorer()
+
+        try root.storeRecursively(storer: storer)
+
+        XCTAssertNotNil(storer.entries[root.rawCID])
+        XCTAssertNil(storer.entries[nested.rawCID])
     }
 
     func testIncompleteBoundaryIsNeverEmitted() async throws {

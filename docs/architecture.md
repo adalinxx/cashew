@@ -274,7 +274,8 @@ cashew's job is the DAG walk and the integrity checks around these calls:
 - **Write.** `Header.storeRecursively(storer:)`
   (`Sources/cashew/Fetcher/Header+store.swift`) is the inverse: it serializes
   the loaded node (re-encrypting from `encryptionInfo` when present), calls
-  `storer.store`, then recurses into the node's children. `contains` lets a
+  `storer.store`, then recurses into ordinary child Headers. It stops at Volume
+  boundaries; Volumes require the complete-boundary API below. `contains` lets a
   store short-circuit already-persisted CIDs, so re-storing a structurally-shared
   tree only writes the changed path.
 

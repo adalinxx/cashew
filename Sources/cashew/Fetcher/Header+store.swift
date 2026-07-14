@@ -83,7 +83,9 @@ extension Header {
 }
 
 public extension Header {
+    /// Stores an ordinary Header graph, stopping before each Volume boundary.
     func storeRecursively(storer: Storer) throws {
+        guard !(self is any Volume) else { throw DataErrors.volumeRequiresVolumeStorer }
         guard let node else { return }
         if storer.contains(rawCid: rawCID) { return }
 

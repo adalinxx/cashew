@@ -63,10 +63,6 @@ public extension Volume {
         try await node.storeVolumesRecursively(storer: session)
     }
 
-    /// Legacy block-at-a-time storage for ordinary `Storer` conformers.
-    func storeRecursively(storer: Storer) throws {
-        guard let node else { return }
-        try storer.store(rawCid: rawCID, data: try serializedDataForStorage(storer: storer))
-        try node.storeRecursively(storer: storer)
-    }
+    @available(*, unavailable, message: "Volumes require the complete-boundary VolumeStorer API")
+    func storeRecursively(storer: Storer) throws { }
 }

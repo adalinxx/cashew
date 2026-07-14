@@ -68,22 +68,16 @@ public extension Node {
     }
 
     func storeRecursively(storer: Storer) throws {
-        // Generic best-effort recursion for block-at-a-time Storer callers.
-        // VolumeStorer uses the complete-boundary planner above.
-        var volumeChildren: [any Header] = []
         for property in properties().sorted() {
             guard let header = get(property: property) else { continue }
-
-            if header is any Volume {
-                if header.node != nil {
-                    volumeChildren.append(header)
-                }
-            } else {
-                try header.storeRecursively(storer: storer)
-            }
+            guard !(header is any Volume) else { continue }
+            try header.storeRecursively(storer: storer)
         }
 
-        for header in volumeChildren {
+        if let radixNode = self as? any RadixNode,
+           let value = radixNode.value,
+           let header = value as? any Header,
+           !(header is any Volume) {
             try header.storeRecursively(storer: storer)
         }
     }

@@ -50,7 +50,6 @@ public protocol Header: CashewQueryable, Codable, Sendable, LosslessStringConver
     func proof(paths: ArrayTrie<SparseMerkleProof>, fetcher: Fetcher) async throws -> Self
     func transform(transforms: ArrayTrie<Transform>) throws -> Self?
     func transform(transforms: ArrayTrie<Transform>, keyProvider: KeyProvider?) throws -> Self?
-    func storeRecursively(storer: Storer) throws
     func removingNode() -> Self
     func encrypt(encryption: ArrayTrie<EncryptionStrategy>) throws -> Self
     func encryptSelf(key: SymmetricKey) throws -> Self
