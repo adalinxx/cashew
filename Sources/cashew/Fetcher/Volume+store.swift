@@ -1,20 +1,27 @@
 import ArrayTrie
 
 extension Volume {
-    func storeCurrentVolume(storer: any VolumeStorer) async throws -> NodeType {
+    func storeCurrentVolume(storer: VolumeStorageSession) async throws -> NodeType {
         guard let node else { throw DataErrors.nodeNotAvailable }
+        guard await storer.claim(root: rawCID) else { return node }
 
-        let keyProvider = storer as? any KeyProvider
-        var entries = [rawCID: try serializedDataForStorage(keyProvider: keyProvider)]
-        var visited = Set([rawCID])
-        try node.collectVolumeEntries(
-            into: &entries,
-            visited: &visited,
-            keyProvider: keyProvider
-        )
+        do {
+            var entries = [rawCID: try serializedDataForStorage(keyProvider: storer)]
+            var visited = Set([rawCID])
+            try node.collectVolumeEntries(
+                into: &entries,
+                visited: &visited,
+                keyProvider: storer
+            )
 
-        try await storer.store(volume: SerializedVolume(root: rawCID, entries: entries))
-        return node
+            try await storer.storeClaimed(
+                volume: SerializedVolume(root: rawCID, entries: entries)
+            )
+            return node
+        } catch {
+            await storer.cancel(root: rawCID)
+            throw error
+        }
     }
 }
 
@@ -39,29 +46,32 @@ public extension Volume {
         paths: ArrayTrie<StorageStrategy>,
         storer: any VolumeStorer
     ) async throws {
-        if paths.get([]) == .recursive || paths.get([""]) == .recursive {
-            try await storeRecursively(storer: storer)
+        let session = volumeStorageSession(storer)
+        if paths.isRecursiveHere {
+            try await storeRecursively(storer: session)
             return
         }
 
-        let node = try await storeCurrentVolume(storer: storer)
-        try await node.storeVolumes(paths: paths, storer: storer)
+        let node = try await storeCurrentVolume(storer: session)
+        try await node.storeVolumes(paths: paths, storer: session)
     }
 
     /// Store only this complete Volume boundary.
     func store(storer: any VolumeStorer) async throws {
-        _ = try await storeCurrentVolume(storer: storer)
+        _ = try await storeCurrentVolume(storer: volumeStorageSession(storer))
     }
 
     /// Store this Volume and every materialized nested Volume independently.
     func storeRecursively(storer: any VolumeStorer) async throws {
-        let node = try await storeCurrentVolume(storer: storer)
-        try await node.storeVolumesRecursively(storer: storer)
+        let session = volumeStorageSession(storer)
+        let node = try await storeCurrentVolume(storer: session)
+        guard await session.claimRecursiveExpansion(root: rawCID) else { return }
+        try await node.storeVolumesRecursively(storer: session)
     }
 
     /// Legacy block-at-a-time storage for ordinary `Storer` conformers.
     func storeRecursively(storer: Storer) throws {
-        guard let node else { throw DataErrors.nodeNotAvailable }
+        guard let node else { return }
         try storer.store(rawCid: rawCID, data: try serializedDataForStorage(storer: storer))
         try node.storeRecursively(storer: storer)
     }

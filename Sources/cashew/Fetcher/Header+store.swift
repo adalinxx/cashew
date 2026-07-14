@@ -14,17 +14,21 @@ extension Header {
     func serializedDataForStorage(keyProvider: (any KeyProvider)?) throws -> Data {
         guard let node else { throw DataErrors.nodeNotAvailable }
 
+        let data: Data
         if let info = encryptionInfo {
             guard let keyProvider else { throw DataErrors.keyNotFound }
             guard let key = keyProvider.key(for: info.keyHash) else { throw DataErrors.keyNotFound }
             guard let ivData = info.ivData else { throw DataErrors.invalidIV }
             let nonce = try AES.GCM.Nonce(data: ivData)
             let plaintext = try Self.serializeNode(node, codec: Self.defaultCodec)
-            return try EncryptionHelper.encrypt(data: plaintext, key: key, nonce: nonce)
+            data = try EncryptionHelper.encrypt(data: plaintext, key: key, nonce: nonce)
+        } else {
+            guard let nodeData = node.toData() else { throw DataErrors.serializationFailed }
+            data = nodeData
         }
 
-        guard let nodeData = node.toData() else { throw DataErrors.serializationFailed }
-        return nodeData
+        try verifyData(data, matches: rawCID)
+        return data
     }
 
     func collectVolumeEntries(
@@ -53,7 +57,7 @@ extension Header {
         }
 
         guard let node else { throw DataErrors.nodeNotAvailable }
-        if paths.get([]) == .recursive || paths.get([""]) == .recursive {
+        if paths.isRecursiveHere {
             try await node.storeVolumesRecursively(storer: storer)
         } else {
             try await node.storeVolumes(paths: paths, storer: storer)

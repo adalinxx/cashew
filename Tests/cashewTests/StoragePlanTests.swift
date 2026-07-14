@@ -75,6 +75,50 @@ final class StoragePlanTests: XCTestCase {
         }
     }
 
+    private struct PairNode: Node {
+        let first: VolumeImpl<Leaf>
+        let second: VolumeImpl<Leaf>
+
+        func get(property: PathSegment) -> (any Header)? {
+            switch property {
+            case "first": first
+            case "second": second
+            default: nil
+            }
+        }
+
+        func properties() -> Set<PathSegment> { ["first", "second"] }
+
+        func set(properties: [PathSegment: any Header]) -> Self {
+            Self(
+                first: properties["first"] as? VolumeImpl<Leaf> ?? first,
+                second: properties["second"] as? VolumeImpl<Leaf> ?? second
+            )
+        }
+    }
+
+    private struct SharedVolumeNode: Node {
+        let left: VolumeImpl<PairNode>
+        let right: VolumeImpl<PairNode>
+
+        func get(property: PathSegment) -> (any Header)? {
+            switch property {
+            case "left": left
+            case "right": right
+            default: nil
+            }
+        }
+
+        func properties() -> Set<PathSegment> { ["left", "right"] }
+
+        func set(properties: [PathSegment: any Header]) -> Self {
+            Self(
+                left: properties["left"] as? VolumeImpl<PairNode> ?? left,
+                right: properties["right"] as? VolumeImpl<PairNode> ?? right
+            )
+        }
+    }
+
     private struct WrapperNode: Node {
         let wrapper: HeaderImpl<BranchNode>
 
@@ -144,6 +188,14 @@ final class StoragePlanTests: XCTestCase {
                 if let data = entries[rawCid] { return data }
             }
             throw FetchError.notFound
+        }
+    }
+
+    private final class LegacyStorer: Storer {
+        private(set) var entries: [String: Data] = [:]
+
+        func store(rawCid: String, data: Data) throws {
+            entries[rawCid] = data
         }
     }
 
@@ -241,6 +293,66 @@ final class StoragePlanTests: XCTestCase {
             XCTAssertEqual(error as? InjectedFailure, .store(child.rawCID))
         }
         XCTAssertEqual(storer.roots, [outer.rawCID])
+    }
+
+    func testSharedVolumesAreEmittedOnceWithoutDroppingDistinctTargetedPaths() async throws {
+        let first = try VolumeImpl(node: Leaf(value: "first"))
+        let second = try VolumeImpl(node: Leaf(value: "second"))
+        let shared = try VolumeImpl(node: PairNode(first: first, second: second))
+        let outer = try VolumeImpl(node: SharedVolumeNode(left: shared, right: shared))
+
+        let recursive = RecordingStorer()
+        try await outer.storeRecursively(storer: recursive)
+        XCTAssertEqual(recursive.roots, [outer.rawCID, shared.rawCID, first.rawCID, second.rawCID])
+
+        let targeted = RecordingStorer()
+        try await outer.store(
+            paths: [
+                ["left", "first"]: .targeted,
+                ["right", "second"]: .targeted,
+            ],
+            storer: targeted
+        )
+        XCTAssertEqual(targeted.roots, [outer.rawCID, shared.rawCID, first.rawCID, second.rawCID])
+    }
+
+    func testMismatchedContentAddressPreventsBoundaryEmission() async throws {
+        let expectedRoot = try VolumeImpl(node: Leaf(value: "expected-root"))
+        let mismatchedRoot = VolumeImpl<Leaf>(
+            rawCID: expectedRoot.rawCID,
+            node: Leaf(value: "other-root"),
+            encryptionInfo: nil
+        )
+        let rootStore = RecordingStorer()
+
+        await XCTAssertThrowsErrorAsync(try await mismatchedRoot.store(storer: rootStore)) { error in
+            XCTAssertEqual(error as? DataErrors, .cidMismatch)
+        }
+        XCTAssertTrue(rootStore.roots.isEmpty)
+
+        let expectedChild = try HeaderImpl(node: Leaf(value: "expected-child"))
+        let mismatchedChild = HeaderImpl<Leaf>(
+            rawCID: expectedChild.rawCID,
+            node: Leaf(value: "other-child"),
+            encryptionInfo: nil
+        )
+        let outer = try VolumeImpl(node: SameBoundaryNode(child: mismatchedChild))
+        let childStore = RecordingStorer()
+
+        await XCTAssertThrowsErrorAsync(try await outer.store(storer: childStore)) { error in
+            XCTAssertEqual(error as? DataErrors, .cidMismatch)
+        }
+        XCTAssertTrue(childStore.roots.isEmpty)
+    }
+
+    func testLegacyStorerSkipsUnresolvedVolumesConsistently() throws {
+        let resolved = try VolumeImpl(node: Leaf(value: "remote"))
+        let unresolved = VolumeImpl<Leaf>(rawCID: resolved.rawCID)
+        let storer = LegacyStorer()
+
+        try unresolved.storeRecursively(storer: storer)
+
+        XCTAssertTrue(storer.entries.isEmpty)
     }
 
     func testIncompleteBoundaryIsNeverEmitted() async throws {

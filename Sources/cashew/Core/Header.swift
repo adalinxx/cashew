@@ -152,13 +152,13 @@ public extension Header {
 
     func fetchAndDecodeNode(fetcher: Fetcher) async throws -> NodeType {
         let fetchedData = try await fetcher.fetch(rawCid: rawCID)
-        try verifyFetchedData(fetchedData, matches: rawCID)
+        try verifyData(fetchedData, matches: rawCID)
         let decrypted = try decryptIfNeeded(data: fetchedData, fetcher: fetcher)
         guard let node = NodeType(data: decrypted) else { throw CashewDecodingError.decodeFromDataError }
         return node
     }
 
-    func verifyFetchedData(_ data: Data, matches rawCID: String) throws {
+    func verifyData(_ data: Data, matches rawCID: String) throws {
         let expectedCID = try CID(rawCID)
         guard let hashAlgorithm = expectedCID.multihash.algorithm else {
             throw DataErrors.cidCreationFailed

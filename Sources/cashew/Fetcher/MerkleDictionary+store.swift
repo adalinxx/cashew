@@ -5,7 +5,8 @@ public extension MerkleDictionary {
         paths: ArrayTrie<StorageStrategy>,
         storer: any VolumeStorer
     ) async throws {
-        if paths.get([]) == .recursive || paths.get([""]) == .recursive {
+        let storer = volumeStorageSession(storer)
+        if paths.isRecursiveHere {
             try await storeVolumesRecursively(storer: storer)
             return
         }

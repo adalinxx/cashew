@@ -50,6 +50,7 @@ public extension Node {
         paths: ArrayTrie<StorageStrategy>,
         storer: any VolumeStorer
     ) async throws {
+        let storer = volumeStorageSession(storer)
         for property in properties().sorted() {
             guard let header = get(property: property) else {
                 throw DataErrors.missingDeclaredChild(property)
@@ -59,6 +60,9 @@ public extension Node {
                 try await header.storeNestedVolumesRecursively(storer: storer)
             } else if let nextPaths = paths.traverse([property]) {
                 try await header.storeSelectedVolumes(paths: nextPaths, storer: storer)
+            } else if paths.get([property]) == .targeted,
+                      let volume = header as? any Volume {
+                try await volume.store(storer: storer)
             }
         }
     }

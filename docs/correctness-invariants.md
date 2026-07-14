@@ -32,12 +32,17 @@ path interpretation matches resolution, including compressed radix keys.
 An unresolved same-boundary Header always makes the current Volume incomplete. An
 unresolved nested Volume is allowed when unselected and fails when selected.
 
-## CASHEW-VOLUME-007 — encrypted storage preserves content identity
+## CASHEW-VOLUME-007 — stored bytes preserve content identity
 
-Bytes emitted for an encrypted Header hash to its declared CID and decrypt to the
-original node when the `VolumeStorer` also conforms to `KeyProvider`.
+Every emitted entry hashes to its declared CID. Encrypted entries also decrypt to
+the original node when the `VolumeStorer` conforms to `KeyProvider`.
 
-## CASHEW-VOLUME-008 — policy remains outside Cashew
+## CASHEW-VOLUME-008 — shared Volumes are emitted once
+
+A selected Volume reachable through multiple DAG paths is emitted once per storage
+operation. Distinct targeted subplans through that Volume are still traversed.
+
+## CASHEW-VOLUME-009 — policy remains outside Cashew
 
 Cashew enforces boundary completeness and follows caller-provided paths. It does not
 infer application retention, workflow completeness, validity, or canonicity.

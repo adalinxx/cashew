@@ -5,6 +5,7 @@ public extension RadixNode {
         paths: ArrayTrie<StorageStrategy>,
         storer: any VolumeStorer
     ) async throws {
+        let storer = volumeStorageSession(storer)
         let pathValuesAndTries = paths.valuesAlongPath(prefix)
         if pathValuesAndTries.contains(where: { $0.1 == .recursive }) {
             try await storeVolumesRecursively(storer: storer)
