@@ -15,6 +15,15 @@ content-addressed DAG remains the sole source of relationships between Volumes.
   fetch in the same resolution fails.
 - Sparse writes make no completeness or retention claim.
 
+### Migrating legacy sparse writes
+
+The async `Header.storeRecursively(storer:)` is intentionally fail-closed: every
+reachable Header must be materialized before the batch is emitted. It is not a
+drop-in replacement for the removed best-effort recursive writer, which skipped
+CID-only stubs. Pruned DAGs and sparse Merkle proofs should use
+`Header.store(paths:storer:)` with the same `ResolutionStrategy` paths that
+describe the witnessed or materialized branches.
+
 ## Volume storage contract
 
 - Cashew fully serializes the selected Volume before calling `VolumeStorer`.

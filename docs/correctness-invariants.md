@@ -4,7 +4,8 @@
 
 `Header.store(paths:storer:)` emits exactly the blocks that resolving the same
 `ResolutionStrategy` paths would fetch from a CID-only root. This includes
-targeted, recursive, list, range, and compressed-radix traversal.
+targeted, recursive, list, range, and compressed-radix traversal. An empty plan
+selects no blocks for either operation; use `store(storer:)` for the root alone.
 
 ## CASHEW-SPARSE-002 — sparse writes are verified, not complete
 

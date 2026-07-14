@@ -137,6 +137,25 @@ final class SparseStorageTests: XCTestCase {
         XCTAssertEqual(Set(store.entries.keys), [root.rawCID, left.rawCID])
     }
 
+    func testEmptyPlanStoresAndResolvesNothing() async throws {
+        let root = try HeaderImpl(node: Leaf(value: "root"))
+        let backing = MemoryBlockStore()
+        try await root.store(storer: backing)
+        let fetcher = RecordingFetcher(backing)
+        let emptyPaths = ArrayTrie<ResolutionStrategy>()
+
+        let resolved = try await root.removingNode().resolve(
+            paths: emptyPaths,
+            fetcher: fetcher
+        )
+        let stored = MemoryBlockStore()
+        try await root.store(paths: emptyPaths, storer: stored)
+
+        XCTAssertNil(resolved.node)
+        XCTAssertTrue(fetcher.fetched.isEmpty)
+        XCTAssertTrue(stored.entries.isEmpty)
+    }
+
     func testSelectedUnresolvedBlockFailsBeforeEmission() async throws {
         let left = try HeaderImpl(node: Leaf(value: "left"))
         let resolvedRight = try HeaderImpl(node: Leaf(value: "right"))
